@@ -75,8 +75,20 @@ target/
 # Jupyter NB Checkpoints
 .ipynb_checkpoints/
 
-# exclude data from source control by default
-/data/
+# Ignore tout dans data par défaut
+data/*
+
+# Mais garde la structure
+!data/
+!data/raw/
+
+# Ignore le contenu brut
+data/raw/*
+
+# Sauf le fichier sentinelle et les pointeurs DVC
+!data/raw/.gitkeep
+!data/raw/*.dvc
+
 
 # Mac OS-specific storage files
 .DS_Store
