@@ -88,6 +88,7 @@ data/raw/*
 # Sauf le fichier sentinelle et les pointeurs DVC
 !data/raw/.gitkeep
 !data/raw/*.dvc
+!data/raw.dvc
 
 
 # Mac OS-specific storage files
