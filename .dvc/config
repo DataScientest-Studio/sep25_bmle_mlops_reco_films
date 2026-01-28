@@ -1,0 +1,7 @@
+[core]
+    remote = dagshub
+['remote "dagshub"']
+    url = https://dagshub.com/pierreB-boop/sep25_bmle_mlops_reco_films.dvc
+    auth = basic
+    user = pierreB-boop
+    password = a47604d8b360a2669d8766775418347d9eb260cf
