@@ -75,20 +75,27 @@ target/
 # Jupyter NB Checkpoints
 .ipynb_checkpoints/
 
-# Ignore tout dans data par défaut
-data/*
+# ------------------------------------------------------------
+# DATA : ignorer les données par défaut
+# ------------------------------------------------------------
+data/**
 
-# Mais garde la structure
+# ------------------------------------------------------------
+# DVC : ne PAS ignorer les fichiers de tracking DVC
+# ------------------------------------------------------------
+!data/**/*.dvc
+
+# ------------------------------------------------------------
+# Garder la structure des dossiers
+# ------------------------------------------------------------
 !data/
-!data/raw/
+!data/**/
 
-# Ignore le contenu brut
-data/raw/*
+# ------------------------------------------------------------
+# (Optionnel) si tu utilises des fichiers sentinelles
+# ------------------------------------------------------------
+!data/**/.gitkeep
 
-# Sauf le fichier sentinelle et les pointeurs DVC
-!data/raw/.gitkeep
-!data/raw/*.dvc
-!data/raw.dvc
 
 
 # Mac OS-specific storage files

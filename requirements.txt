@@ -1,1 +1,6 @@
 
+click
+pandas
+python-dotenv
+sqlalchemy
+psycopg2-binary

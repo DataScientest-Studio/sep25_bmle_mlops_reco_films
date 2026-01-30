@@ -1,119 +1,123 @@
-# src/data/build_features.py
+# ------------------------------------------------------------
+# FICHIER : src/features/build_features.py
+# ------------------------------------------------------------
+# OBJECTIF :
+# - Lire les CSV propres produits par make_dataset.py
+# - Construire des features "content-based" simples :
+#   1) movie_matrix.csv : movieId + one-hot des genres
+#   2) user_matrix.csv  : userId + moyenne des genres vus
+#
+# IMPORTANT :
+# - Ce script ne parle pas à la base PostgreSQL
+# - Il travaille sur des fichiers data/processed/
+# - Ces fichiers peuvent être versionnés avec DVC
+# ------------------------------------------------------------
 
 from __future__ import annotations
 
 from pathlib import Path
-import sqlite3
-
 import pandas as pd
 
 
-def build_user_movie_matrices_from_db(
-    db_path: Path,
-    out_dir: Path,
-    ratings_table: str = "raw_ratings",
-    movies_table: str = "raw_movies",
-    logger=None,
-) -> None:
-    """
-    Objectif (Content-based) :
-    - Construire une matrice "films" : movieId + genres (one-hot)
-    - Construire une matrice "users" : userId + préférences de genres (moyenne des genres vus)
+# ------------------------------------------------------------
+# 1) CONFIG SIMPLE (pas d'optionnel)
+# ------------------------------------------------------------
 
-    Entrées (dans SQLite) :
-    - ratings_table : userId, movieId, rating, timestamp
-    - movies_table  : movieId, title, genres
+# Dossier où make_dataset.py a écrit ses fichiers
+PROCESSED_DIR = Path("data/processed")
 
-    Sorties (CSV) dans out_dir :
-    - movie_matrix.csv : movieId + colonnes genres 0/1
-    - user_matrix.csv  : userId + colonnes genres (moyenne des genres vus)
-    """
+# Fichiers d'entrée
+MOVIES_CSV = PROCESSED_DIR / "movies_clean.csv"
+RATINGS_CSV = PROCESSED_DIR / "ratings_clean.csv"
 
-    # --- 0) Préparer le dossier de sortie ---
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+# Fichiers de sortie
+MOVIE_MATRIX_OUT = PROCESSED_DIR / "movie_matrix.csv"
+USER_MATRIX_OUT = PROCESSED_DIR / "user_matrix.csv"
 
-    # Petite fonction de log "safe"
-    def _log(msg: str) -> None:
-        if logger is not None:
-            logger.info(msg)
-        else:
-            print(msg)
 
-    _log(f"Reading SQLite DB: {db_path}")
-    _log(f"Tables: ratings={ratings_table} | movies={movies_table}")
+def main() -> None:
+    # --------------------------------------------------------
+    # 2) Vérifier que les fichiers existent
+    # --------------------------------------------------------
+    if not MOVIES_CSV.exists():
+        raise FileNotFoundError(f"Fichier manquant : {MOVIES_CSV} (lance make_dataset.py avant)")
 
-    # --- 1) Lire les tables depuis SQLite ---
-    # On utilise sqlite3 (standard library) + pandas.read_sql_query (pratique).
-    with sqlite3.connect(str(db_path)) as conn:
-        ratings = pd.read_sql_query(f"SELECT userId, movieId, rating, timestamp FROM {ratings_table};", conn)
-        movies = pd.read_sql_query(f"SELECT movieId, title, genres FROM {movies_table};", conn)
+    if not RATINGS_CSV.exists():
+        raise FileNotFoundError(f"Fichier manquant : {RATINGS_CSV} (lance make_dataset.py avant)")
 
-    # --- 2) Sanity checks minimalistes ---
-    # Si tu as un bug de colonnes, tu le vois tout de suite ici.
-    needed_ratings = ["userId", "movieId", "rating"]
-    needed_movies = ["movieId", "title", "genres"]
+    # --------------------------------------------------------
+    # 3) Charger les CSV
+    # --------------------------------------------------------
+    movies = pd.read_csv(MOVIES_CSV)
+    ratings = pd.read_csv(RATINGS_CSV)
 
-    for col in needed_ratings:
-        if col not in ratings.columns:
-            raise ValueError(f"Missing column in {ratings_table}: {col}")
-
-    for col in needed_movies:
+    # --------------------------------------------------------
+    # 4) Sanity checks : colonnes indispensables
+    # --------------------------------------------------------
+    # Si une colonne manque, on préfère planter immédiatement avec un message clair.
+    for col in ["movieId", "title", "genres"]:
         if col not in movies.columns:
-            raise ValueError(f"Missing column in {movies_table}: {col}")
+            raise ValueError(f"Colonne manquante dans movies_clean.csv : {col}")
 
-    # On nettoie les types au passage (utile si SQLite a fait des surprises)
-    ratings["userId"] = ratings["userId"].astype(int)
-    ratings["movieId"] = ratings["movieId"].astype(int)
-    ratings["rating"] = ratings["rating"].astype(float)
+    for col in ["userId", "movieId", "rating"]:
+        if col not in ratings.columns:
+            raise ValueError(f"Colonne manquante dans ratings_clean.csv : {col}")
 
-    movies["movieId"] = movies["movieId"].astype(int)
-    movies["title"] = movies["title"].astype(str)
-    movies["genres"] = movies["genres"].fillna("").astype(str)
+    # --------------------------------------------------------
+    # 5) Construire movie_matrix (one-hot genres)
+    # --------------------------------------------------------
+    # Exemple genres MovieLens :
+    # "Adventure|Animation|Children|Comedy|Fantasy"
+    #
+    # get_dummies(sep="|") crée une colonne par genre.
+    # Chaque colonne vaut 0/1 (absent / présent).
+    genres_oh = (
+        movies["genres"]
+        .fillna("")
+        .replace({"(no genres listed)": ""})
+        .astype(str)
+        .str.get_dummies(sep="|")
+    )
 
-    # --- 3) Construire la "movie_matrix" : movieId + one-hot genres ---
-    # Exemple genres: "Adventure|Animation|Children|Comedy|Fantasy"
-    # str.get_dummies sep="|" crée directement des colonnes binaires 0/1.
-    genres_oh = movies["genres"].replace({"(no genres listed)": ""}).str.get_dummies(sep="|")
-
-    # Optionnel mais pratique : préfixer les colonnes pour éviter collisions / clarté
+    # Pour rendre clair que ces colonnes sont des genres
     genres_oh = genres_oh.add_prefix("genre__")
 
-    # On garde movieId (clé) + colonnes genres
-    movie_matrix = pd.concat([movies[["movieId", "title"]], genres_oh], axis=1)
+    # movie_matrix = movieId + colonnes de genres
+    movie_matrix = pd.concat([movies[["movieId"]], genres_oh], axis=1)
 
-    # --- 4) Construire la "user_matrix" (profil utilisateur moyen par genre) ---
-    # Étape A : joindre ratings avec movie_matrix pour récupérer les genres des films notés
-    # -> on obtient : userId, movieId, rating, timestamp, title, genre__Action, genre__Comedy, ...
+    # --------------------------------------------------------
+    # 6) Construire user_matrix (profil utilisateur)
+    # --------------------------------------------------------
+    # On associe chaque rating à ses genres via un merge sur movieId
     movie_ratings = ratings.merge(movie_matrix, on="movieId", how="inner")
 
-    # Étape B : on ne garde que userId + colonnes genres
-    # (On jette rating/timestamp/title car notre "profil" = moyenne des genres vus)
-    # NB: Ça reproduit ton code CSV, mais version DB.
-    cols_to_drop = ["movieId", "timestamp", "title", "rating"]
-    cols_to_drop = [c for c in cols_to_drop if c in movie_ratings.columns]  # safe si timestamp absent
+    # On garde uniquement userId + colonnes genres
+    # (on jette rating car on fait un profil "vu", pas pondéré)
+    cols_to_drop = ["movieId", "rating"]
+    cols_to_drop = [c for c in cols_to_drop if c in movie_ratings.columns]
     movie_ratings = movie_ratings.drop(columns=cols_to_drop)
 
-    # Étape C : moyenne par userId
-    # -> si un user a vu 10 films dont 7 "Action", il aura une valeur élevée en genre__Action.
+    # Maintenant movie_ratings ressemble à :
+    # userId, genre__Action, genre__Comedy, genre__Drama, ...
+    #
+    # groupby("userId").mean() :
+    # - moyenne des colonnes genres pour chaque utilisateur
+    # - donc plus un user voit des films Action, plus genre__Action sera élevé
     user_matrix = movie_ratings.groupby("userId").mean(numeric_only=True)
 
-    # --- 5) Sauvegarder les sorties ---
-    # IMPORTANT :
-    # - movie_matrix : on enlève "title" si tu veux strictement un "movieId + features"
-    # - user_matrix : index=userId, donc index=True est OK (tu auras userId en 1ère colonne du CSV)
-    movie_features_only = movie_matrix.drop(columns=["title"])
+    # --------------------------------------------------------
+    # 7) Sauvegarder les résultats
+    # --------------------------------------------------------
+    movie_matrix.to_csv(MOVIE_MATRIX_OUT, index=False)
+    user_matrix.to_csv(USER_MATRIX_OUT)  # index = userId
 
-    movie_out = out_dir / "movie_matrix.csv"
-    user_out = out_dir / "user_matrix.csv"
+    # --------------------------------------------------------
+    # 8) Logs simples
+    # --------------------------------------------------------
+    print("✅ build_features terminé")
+    print(f"   - {MOVIE_MATRIX_OUT} -> {movie_matrix.shape[0]} lignes, {movie_matrix.shape[1]} colonnes")
+    print(f"   - {USER_MATRIX_OUT}  -> {user_matrix.shape[0]} users, {user_matrix.shape[1]} features")
 
-    movie_features_only.to_csv(movie_out, index=False)
-    user_matrix.to_csv(user_out)  # index = userId
 
-    _log(f"Saved: {movie_out}")
-    _log(f"Saved: {user_out}")
-
-    # --- 6) Mini rapport (super utile pour debug) ---
-    _log(f"ratings rows: {len(ratings):,} | movies rows: {len(movies):,}")
-    _log(f"movie_matrix shape: {movie_features_only.shape} (rows, cols)")
-    _log(f"user_matrix shape: {user_matrix.shape} (users, genre-features)")
+if __name__ == "__main__":
+    main()

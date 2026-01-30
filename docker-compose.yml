@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: movie_reco_postgres
+    environment:
+      POSTGRES_USER: movie
+      POSTGRES_PASSWORD: movie
+      POSTGRES_DB: movie_reco
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
