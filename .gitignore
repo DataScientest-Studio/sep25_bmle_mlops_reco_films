@@ -97,6 +97,10 @@ data/**
 !data/**/.gitkeep
 
 
+# ------------------------------------------------------------
+# Artefact modèle versionné avec DVC
+# ------------------------------------------------------------
+models/*.pkl
 
 # Mac OS-specific storage files
 .DS_Store

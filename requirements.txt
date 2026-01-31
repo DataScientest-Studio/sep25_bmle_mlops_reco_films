@@ -1,6 +1,8 @@
 
 click
-pandas
+ppandas==3.0.0
 python-dotenv
 sqlalchemy
 psycopg2-binary
+numpy==2.4.1
+scikit-learn==1.8.0
