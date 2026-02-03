@@ -5,8 +5,8 @@ python-dotenv==1.2.1
 sqlalchemy==2.0.46
 psycopg2-binary==2.9.11
 numpy==2.4.1
-scikit-learn==1.8.0
-scipy==1.17.0
+scikit-learn==1.7.3
+scipy==1.16.1
 joblib==1.5.3
 fastapi==0.128.0
 uvicorn==0.40.0
