@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import subprocess
 import sys
+from typing import List, Optional
 
 from src.models.predict_model import recommend_similar_movies
 
@@ -23,11 +24,23 @@ class TrainingRequest(BaseModel):
         description="Si true, lance l'entraînement même si des artefacts existent déjà",
     )
 
+class RecommendationItem(BaseModel):
+    movieId: int
+    title: Optional[str]
+    distance: float
+
+
+class PredictResponse(BaseModel):
+    movieId: int
+    query_title: Optional[str]
+    top_n: int
+    recommendations: List[RecommendationItem]
+
 
 # -----------------------------
 # Endpoint PREDICT
 # -----------------------------
-@app.post("/predict")
+@app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest):
     try:
         return recommend_similar_movies(movie_id=req.movie_id, top_n=req.top_n)

@@ -1,5 +1,5 @@
 # ============================================================
-# TRAIN_MODEL.PY
+# TRAIN_MODEL2.PY
 # ============================================================
 # OBJECTIF
 # ------------------------------------------------------------
@@ -179,6 +179,7 @@ def train_item_based_cf() -> None:
             con=conn,
             schema=SCHEMA,
             index=False,
+            if_exists="replace",
         )
 
         movie_popularity.to_sql(
@@ -186,16 +187,10 @@ def train_item_based_cf() -> None:
             con=conn,
             schema=SCHEMA,
             index=False,
+            if_exists="replace",
         )
 
-        conn.execute(
-            text(
-                f"""
-                CREATE INDEX IF NOT EXISTS idx_item_neighbors_movie
-                ON {SCHEMA}.item_neighbors(movieId)
-                """
-            )
-        )
+
 
 if __name__ == "__main__":
     train_item_based_cf()
