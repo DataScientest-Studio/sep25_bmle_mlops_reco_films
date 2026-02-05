@@ -112,3 +112,7 @@ models/*.pkl
 
 # Mypy cache
 .mypy_cache/
+
+# MLflow
+reports/mlruns/
+data/db/mlflow.sqlite
