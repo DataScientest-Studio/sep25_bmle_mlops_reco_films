@@ -116,3 +116,7 @@ models/*.pkl
 # MLflow
 reports/mlruns/
 data/db/mlflow.sqlite
+
+# MLflow local artifacts
+mlruns/
+reports/run_info.json
