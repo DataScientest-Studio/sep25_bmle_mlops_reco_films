@@ -120,3 +120,4 @@ data/db/mlflow.sqlite
 # MLflow local artifacts
 mlruns/
 reports/run_info.json
+mlflow_artifacts/

@@ -13,3 +13,5 @@ uvicorn==0.40.0
 pydantic==2.12.5
 matplotlib==3.10.8
 mlflow
+pyarrow==16.1.0
+pyyaml==6.0.2
