@@ -130,30 +130,57 @@ def update_data_pipeline():
 @app.post("/training")
 def training():
     """
-    Lance le script de training qui s'occupe de :
-    - Créer le snapshot CSV depuis SQL
-    - Entraîner le modèle
-    - Faire le 'dvc add' sur le nouveau snapshot
+    Lance le pipeline complet :
+    1. Création du snapshot (create_snapshot.py) -> génère data/training_set.csv
+    2. Versionning DVC (dvc add)
+    3. Entraînement (train_model2.py)
     """
+    logs = []
     try:
-        logger.info("🏋️‍♂️ Lancement du training pipeline...")
-        completed = subprocess.run(
+        # ETAPE 1 : Création du Snapshot CSV
+        logger.info("📸 Lancement de create_snapshot.py...")
+        snap_process = subprocess.run(
+            [sys.executable, "src/ingestion/create_snapshot.py"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        logs.append(f"--- SNAPSHOT ---\n{snap_process.stdout}")
+
+        # ETAPE 2 : DVC Add (pour versionner le CSV généré)
+        logger.info("📦 Versionning DVC (dvc add data/training_set.csv)...")
+        # On suppose que dvc est dans le PATH
+        dvc_process = subprocess.run(
+            ["dvc", "add", "data/training_set.csv"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        logs.append(f"--- DVC ADD ---\n{dvc_process.stdout}")
+
+        # ETAPE 3 : Entraînement du modèle
+        logger.info("🏋️‍♂️ Lancement du training (train_model2.py)...")
+        train_process = subprocess.run(
             [sys.executable, "src/models/train_model2.py"],
             check=True,
             capture_output=True,
             text=True,
         )
-        logger.info("✅ Training et Snapshot DVC terminés.")
+        logs.append(f"--- TRAINING ---\n{train_process.stdout}")
+        
+        logger.info("✅ Pipeline complet terminé.")
         
         return {
             "status": "success",
-            "message": "Modèle réentraîné et snapshot versionné",
-            "logs": completed.stdout
+            "message": "Snapshot créé, versionné et Modèle réentraîné.",
+            "logs": "\n".join(logs)
         }
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"❌ Erreur Training : {e.stderr}")
-        raise HTTPException(status_code=500, detail=f"Erreur Training: {e.stderr}")
+        # On capture la sortie d'erreur (stderr) du processus qui a échoué
+        error_msg = e.stderr if e.stderr else str(e)
+        logger.error(f"❌ Erreur Pipeline : {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Erreur Pipeline: {error_msg}")
 
 # ------------------------------------------------------------
 # 3. PREDICTION (/recommend)
