@@ -16,6 +16,8 @@ from sqlalchemy import create_engine, text
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import NearestNeighbors
 import argparse
+import mlflow.pyfunc
+from src.models.mlflow_model import ItemCFPyFunc
 
 # ------------------------------------------------------------
 # 0. GIT FIX FOR WINDOWS & MLFLOW
@@ -100,6 +102,30 @@ def compute_bayesian_popularity(ratings: pd.DataFrame) -> pd.DataFrame:
         ]
     )
 
+<<<<<<< HEAD
+=======
+# ------------------------------------------------------------
+# METRIQUES D'ÉVALUATION
+# ------------------------------------------------------------
+
+def recall_at_10(recommended, relevant):
+    recommended_set = set(recommended[:10])
+    relevant_set = set(relevant)
+    if len(relevant_set) == 0:
+        return 0
+    return len(recommended_set & relevant_set) / len(relevant_set)
+
+def ndcg_at_10(recommended, relevant):
+    dcg = 0.0
+    for i, movie in enumerate(recommended[:10]):
+        if movie in relevant:
+            dcg += 1 / np.log2(i + 2)
+
+    idcg = sum(1 / np.log2(i + 2) for i in range(min(len(relevant), 10)))
+    if idcg == 0:
+        return 0
+    return dcg / idcg
+>>>>>>> 34e9f92 (MLflow complet: PyFunc model + production alias + script predictadapté à MLFLOW test reco OK)
 
 # ENTRAÎNEMENT ITEM-BASED COLLABORATIVE FILTERING
 # ------------------------------------------------------------
@@ -225,7 +251,65 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         )
     
         # --- 5) Popularité globale ---
+<<<<<<< HEAD
         movie_popularity = compute_bayesian_popularity(train_ratings)
+=======
+        movie_popularity = compute_bayesian_popularity(ratings)
+
+
+        # ------------------------------------------------------------
+        # ÉVALUATION (utilise réellement les voisins KNN)
+        # ------------------------------------------------------------
+
+        neighbors_dict = (
+            item_neighbors.groupby("movieId")[["neighborMovieId", "similarity"]]
+            .apply(lambda df: list(df.itertuples(index=False, name=None)))
+            .to_dict()
+)
+
+
+        recalls = []
+        ndcgs = []
+
+        for user_id, user_data in test_ratings.groupby("userId"):
+
+            user_train_movies = train_movies_per_user.get(user_id, [])
+
+            if not user_train_movies:
+                continue
+
+            scores = {}
+
+            for movie in user_train_movies:
+                if movie in neighbors_dict:
+                    for neighbor_movie, sim in neighbors_dict[movie]:
+                        scores[neighbor_movie] = scores.get(neighbor_movie, 0) + sim
+
+            seen = set(user_train_movies)
+            scores = {m: s for m, s in scores.items() if m not in seen}
+
+            if not scores:
+                continue
+
+            recommended_movies = sorted(
+                scores.items(),
+                key=lambda x: x[1],
+                reverse=True
+            )
+
+            recommended_movies = [m for m, _ in recommended_movies][:10]
+
+            relevant_movies = user_data["movieId"].tolist()
+
+            recalls.append(recall_at_10(recommended_movies, relevant_movies))
+            ndcgs.append(ndcg_at_10(recommended_movies, relevant_movies))
+
+        mean_recall = np.mean(recalls)
+        mean_ndcg = np.mean(ndcgs)
+
+        mlflow.log_metric("recall_10", mean_recall)
+        mlflow.log_metric("ndcg_10", mean_ndcg)
+>>>>>>> 34e9f92 (MLflow complet: PyFunc model + production alias + script predictadapté à MLFLOW test reco OK)
 
         # ----------------------------------------------------
         # LOG ARTEFACTS
@@ -242,6 +326,28 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         print(f"[INFO] Uploading artifacts to {mlflow_uri}...")
         mlflow.log_artifact(neighbors_path)
         mlflow.log_artifact(popularity_path)
+
+
+        # ----------------------------------------------------
+        # LOG MODEL (MLflow Registry) - PyFunc
+        # ----------------------------------------------------
+
+        model = ItemCFPyFunc(
+            n_reco=10,
+            min_user_ratings=5,
+            positive_threshold=4.0
+        )
+
+        mlflow.pyfunc.log_model(
+            artifact_path="model",
+            python_model=model,
+            artifacts={
+                "item_neighbors": neighbors_path,
+                "movie_popularity": popularity_path,
+            },
+            code_paths=["src/models/mlflow_model.py"],
+            registered_model_name=REGISTERED_MODEL_NAME,
+        )
 
         # --- 6) Sauvegarde en base ---
         print("[INFO] Sauvegarde en base de donnees...")
