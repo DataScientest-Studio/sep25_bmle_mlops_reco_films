@@ -54,12 +54,16 @@ services:
         condition: service_healthy
     ports:
       - "5000:5000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://localhost:5000
+    # FIX: Added --serve-artifacts and changed artifact destination to root
     command: >
       mlflow server
       --host 0.0.0.0
       --port 5000
       --backend-store-uri postgresql://mlflow:mlflow@mlflow-db:5432/mlflow
-      --artifacts-destination /mlartifacts
+      --default-artifact-root /mlartifacts
+      --serve-artifacts
     volumes:
       - mlflow_artifacts:/mlartifacts
     networks:

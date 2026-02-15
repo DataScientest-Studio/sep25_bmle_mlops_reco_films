@@ -11,9 +11,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import create_engine
 
-# Import de ton modèle
+# Import de ton modèle (pour la prédiction)
 from src.models.predict_model2 import recommend_for_user
-# Import de ton script d'ingestion
+# Import de ton script d'ingestion (pour la mise à jour data)
 from src.ingestion.ingestion_movielens import ingest_movielens
 
 # ------------------------------------------------------------
@@ -96,11 +96,11 @@ def update_data_pipeline():
     """
     report = {}
     
-    # A. DVC PULL SÉLECTIF (On ne prend que le RAW, pas le snapshot training)
+    # A. DVC PULL SÉLECTIF
     try:
         logger.info("📡 DVC PULL sur data/raw.dvc...")
-        # On cible uniquement raw.dvc pour être rapide et précis
-        subprocess.run(["dvc", "pull", "data/raw.dvc"], check=True, capture_output=True, text=True)
+        # On passe explicitement l'environnement pour git/dvc
+        subprocess.run(["dvc", "pull", "data/raw.dvc"], check=True, capture_output=True, text=True, env=os.environ)
         report["dvc_pull"] = "Succès (data/raw synchronisé)"
         
     except subprocess.CalledProcessError as e:
@@ -136,35 +136,54 @@ def training():
     3. Entraînement (train_model2.py)
     """
     logs = []
+    # Force l'utilisation du même interpréteur Python
+    python_exec = sys.executable 
+    # Copie de l'environnement actuel (important pour GIT, MLFLOW, etc.)
+    current_env = os.environ.copy()
+
     try:
         # ETAPE 1 : Création du Snapshot CSV
         logger.info("📸 Lancement de create_snapshot.py...")
+        # Note: create_snapshot est un script standalone, on peut l'appeler par chemin ou via module si présent
+        # Ici on garde le chemin relatif
         snap_process = subprocess.run(
-            [sys.executable, "src/ingestion/create_snapshot.py"],
+            [python_exec, "src/ingestion/create_snapshot.py"],
             check=True,
             capture_output=True,
-            text=True
+            text=True,
+            env=current_env
         )
         logs.append(f"--- SNAPSHOT ---\n{snap_process.stdout}")
 
         # ETAPE 2 : DVC Add (pour versionner le CSV généré)
         logger.info("📦 Versionning DVC (dvc add data/training_set.csv)...")
-        # On suppose que dvc est dans le PATH
         dvc_process = subprocess.run(
             ["dvc", "add", "data/training_set.csv"],
             check=True,
             capture_output=True,
-            text=True
+            text=True,
+            env=current_env
         )
         logs.append(f"--- DVC ADD ---\n{dvc_process.stdout}")
 
         # ETAPE 3 : Entraînement du modèle
         logger.info("🏋️‍♂️ Lancement du training (train_model2.py)...")
+        
+        # FIX: On lance via "-m src.models.train_model2" pour gérer les imports correctement
+        # On ajoute les arguments par défaut (20 voisins, 50 notes min)
+        train_cmd = [
+            python_exec, "-m", "src.models.train_model2",
+            "--n-neighbors", "20",
+            "--min-ratings", "50"
+        ]
+        
         train_process = subprocess.run(
-            [sys.executable, "src/models/train_model2.py"],
+            train_cmd,
             check=True,
             capture_output=True,
             text=True,
+            env=current_env,
+            cwd=os.getcwd() # S'assurer qu'on est à la racine
         )
         logs.append(f"--- TRAINING ---\n{train_process.stdout}")
         
@@ -180,7 +199,9 @@ def training():
         # On capture la sortie d'erreur (stderr) du processus qui a échoué
         error_msg = e.stderr if e.stderr else str(e)
         logger.error(f"❌ Erreur Pipeline : {error_msg}")
-        raise HTTPException(status_code=500, detail=f"Erreur Pipeline: {error_msg}")
+        # On retourne aussi stdout pour le debug
+        full_error = f"ERROR: {error_msg}\nSTDOUT: {e.stdout}"
+        raise HTTPException(status_code=500, detail=full_error)
 
 # ------------------------------------------------------------
 # 3. PREDICTION (/recommend)
