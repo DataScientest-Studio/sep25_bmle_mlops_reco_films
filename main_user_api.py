@@ -74,12 +74,22 @@ def home():
 @app.post("/data")
 def update_data_pipeline():
     report = {}
+    
+    # --- MODIFICATION : VERSIONNING COMPLET (ADD + PUSH) ---
     try:
-        logger.info("📡 DVC PULL...")
-        subprocess.run(["dvc", "pull", "data/raw.dvc"], check=True, capture_output=True, text=True)
-        report["dvc"] = "OK"
+        logger.info("👀 1. Capture des nouvelles données (DVC Add)...")
+        # On capture tout le dossier raw (nouveaux CSV du jour)
+        subprocess.run(["dvc", "add", "data/raw"], check=True)
+        
+        logger.info("☁️ 2. Synchronisation Remote (DVC Push)...")
+        # On envoie les données sur le stockage distant pour les collègues
+        subprocess.run(["dvc", "push", "data/raw.dvc"], check=True)
+        
+        report["dvc"] = "Captured & Pushed"
     except Exception as e:
+        logger.error(f"⚠️ DVC Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"DVC Error: {str(e)}")
+    # -------------------------------------------------------
 
     try:
         logger.info("💾 Ingestion SQL...")
@@ -101,16 +111,27 @@ def update_data_pipeline():
 def training():
     python_exec = sys.executable 
     try:
-        # Snapshot
+        # 1. Snapshot
+        logger.info("📸 Création du snapshot...")
         subprocess.run([python_exec, "src/ingestion/create_snapshot.py"], check=True)
-        # DVC Add
+        
+        # 2. DVC Add (Versionning local)
+        logger.info("📝 DVC Add...")
         subprocess.run(["dvc", "add", "data/training_set.csv"], check=True)
-        # Train
+        
+        # --- AJOUT : DVC PUSH (Pour synchroniser le dataset d'entrainement) ---
+        logger.info("☁️ DVC Push...")
+        subprocess.run(["dvc", "push", "data/training_set.csv.dvc"], check=True)
+        # ----------------------------------------------------------------------
+
+        # 4. Train
+        logger.info("🏃‍♂️ Entraînement...")
         subprocess.run([python_exec, "-m", "src.models.train_model2", "--n-neighbors", "20"], check=True)
         
-        return {"status": "success", "message": "Pipeline complet terminé."}
+        return {"status": "success", "message": "Pipeline complet terminé (Data Pushed & Trained)."}
 
     except subprocess.CalledProcessError as e:
+        logger.error(f"Pipeline Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ------------------------------------------------------------
@@ -120,14 +141,6 @@ def training():
 def recommend(user_id: int, top_n: int = 5):
     """
     Retourne un JSON exploitable par Streamlit.
-    Format:
-    {
-      "user_id": 123,
-      "recommendations": [
-         {"movie_id": 1, "title": "Toy Story", "score": 0.95},
-         ...
-      ]
-    }
     """
     # Vérif cache
     if not TITLE_MAP:
