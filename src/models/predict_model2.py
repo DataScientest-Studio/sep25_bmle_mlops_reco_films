@@ -33,7 +33,7 @@ def fetch_user_ratings(engine, user_id: int) -> pd.DataFrame:
     """Récupère l'historique des notes de l'utilisateur."""
     query = f"""
         SELECT "movieId", rating
-        FROM {SCHEMA}.raw_ratings
+        FROM {SCHEMA}.current_ratings
         WHERE "userId" = %(user_id)s
           AND rating IS NOT NULL
     """
