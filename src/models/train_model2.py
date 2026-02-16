@@ -125,7 +125,6 @@ def ndcg_at_10(recommended, relevant):
     if idcg == 0:
         return 0
     return dcg / idcg
->>>>>>> 34e9f92 (MLflow complet: PyFunc model + production alias + script predictadapté à MLFLOW test reco OK)
 
 # ENTRAÎNEMENT ITEM-BASED COLLABORATIVE FILTERING
 # ------------------------------------------------------------
@@ -251,9 +250,6 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         )
     
         # --- 5) Popularité globale ---
-<<<<<<< HEAD
-        movie_popularity = compute_bayesian_popularity(train_ratings)
-=======
         movie_popularity = compute_bayesian_popularity(ratings)
 
 
@@ -309,7 +305,6 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
 
         mlflow.log_metric("recall_10", mean_recall)
         mlflow.log_metric("ndcg_10", mean_ndcg)
->>>>>>> 34e9f92 (MLflow complet: PyFunc model + production alias + script predictadapté à MLFLOW test reco OK)
 
         # ----------------------------------------------------
         # LOG ARTEFACTS
