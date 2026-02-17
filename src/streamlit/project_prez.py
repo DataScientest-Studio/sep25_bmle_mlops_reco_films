@@ -277,10 +277,163 @@ elif section == "Bases de données PostgreSQL":
 
    
 
-
-
-
 elif section == "Modèle & métriques d’évaluation":
+    slide_header(
+        "🔎 Modèle & métriques d’évaluation",
+        "Architecture algorithmique & logique d'évaluation ranking"
+    )
+
+    # ==========================================================
+    # MODÈLE
+    # ==========================================================
+    st.subheader("🎯 Modèle : Item-Based Collaborative Filtering")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.info("""
+        ### 🔹 Principe mathématique
+
+        Chaque film est représenté par un **vecteur de notes utilisateurs**.
+
+        La similarité entre deux films est calculée avec la **cosine similarity** :
+
+        - Cosine ≈ 1 → films très similaires  
+        - Cosine ≈ 0 → pas de similarité  
+        - Cosine < 0 → préférences opposées  
+
+        Le voisinage est **pré-calculé offline** (K plus proches voisins par film).
+        """)
+
+        st.latex(r"""
+        sim(i,j) = \frac{v_i \cdot v_j}{||v_i|| \cdot ||v_j||}
+        """)
+
+    with col2:
+        st.info("""
+        ### 🔹 Logique de recommandation (online)
+
+        1️⃣ Sélection des films bien notés par l’utilisateur  
+        2️⃣ Récupération de leurs voisins similaires  
+        3️⃣ Score pondéré par similarité × note utilisateur  
+        4️⃣ Exclusion des films déjà vus  
+        5️⃣ Classement Top-N
+
+        ✔️ Inférence rapide  
+        ✔️ Modèle explicable  
+        ✔️ Adapté au ranking
+        """)
+
+    st.markdown("---")
+
+    # ==========================================================
+    # COLD START
+    # ==========================================================
+    st.subheader("🧊 Gestion du Cold-Start")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.success("""
+        ### 🔹 Nouveaux utilisateurs
+        Fallback vers un **score de popularité bayésien** :
+
+        - Moyenne pondérée
+        - Correction pour faible nombre de votes
+        - Évite le biais des films avec peu de notes
+        """)
+
+    with col2:
+        st.success("""
+        ### 🔹 Nouveaux films
+        Un film est recommandé seulement s’il atteint :
+        - un nombre minimum de ratings
+        - un score suffisant
+
+        👉 Garantit robustesse & qualité.
+        """)
+
+    st.markdown("---")
+
+    # ==========================================================
+    # MÉTRIQUES
+    # ==========================================================
+    st.subheader("📊 Métriques d’évaluation (Ranking Metrics)")
+
+    st.markdown("""
+    Le modèle est optimisé pour la **recommandation Top-N**,  
+    et non pour la prédiction exacte des notes.
+
+    L’objectif est de maximiser la qualité du classement.
+    """)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.info("""
+        ### 🔹 Precision@K
+        Proportion de recommandations pertinentes parmi les K proposées.
+
+        👉 Mesure la qualité immédiate du Top-K.
+        """)
+
+        st.latex(r"""
+        Precision@K =
+        \frac{|\{films\ pertinents\} \cap \{TopK\}|}{K}
+        """)
+
+    with col2:
+        st.info("""
+        ### 🔹 Recall@K
+        Capacité à retrouver les films pertinents dans le Top-K.
+
+        👉 Mesure la couverture des préférences utilisateur.
+        """)
+
+        st.latex(r"""
+        Recall@K =
+        \frac{|\{films\ pertinents\} \cap \{TopK\}|}
+        {|\{films\ pertinents\}|}
+        """)
+
+    st.markdown("---")
+
+    st.subheader("🏆 NDCG@K (métrique principale du projet)")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.info("""
+        NDCG prend en compte :
+        - la pertinence
+        - la position dans le classement
+
+        👉 Une recommandation pertinente en position 1 vaut plus
+        qu’en position 10.
+        """)
+
+    with col2:
+        st.latex(r"""
+        DCG@K = \sum_{i=1}^{K}
+        \frac{rel_i}{\log_2(i+1)}
+        """)
+
+        st.latex(r"""
+        NDCG@K = \frac{DCG@K}{IDCG@K}
+        """)
+
+    st.markdown("---")
+
+    key_takeaways("Pourquoi ces métriques ?", [
+        "Projet orienté ranking et non régression",
+        "Optimisation basée sur NDCG@10",
+        "Alignement avec les standards des systèmes de recommandation industriels",
+    ])
+
+
+
+
+elif section == "Modèle & métriques d’évaluation old":
     slide_header(
         "🔎 Modèle & métriques d’évaluation",        
     )  
@@ -362,11 +515,107 @@ elif section == "Modèle & métriques d’évaluation":
         """)
 
 
-    
+elif section == "Suivi des Expériences via MLflow":
+    slide_header(
+        "📊 Suivi des Expériences via MLflow",
+        "Traçabilité, reproductibilité et gouvernance modèle"
+    )
+
+    st.subheader("🎯 Objectifs MLOps")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.info("""
+        ✔️ Tracer chaque entraînement  
+        ✔️ Logger hyperparamètres  
+        ✔️ Logger métriques (recall@10, ndcg@10)  
+        ✔️ Sauvegarder artefacts (modèle PyFunc)  
+        ✔️ Garantir reproductibilité
+        """)
+
+    with col2:
+        st.info("""
+        ✔️ Versioning des modèles  
+        ✔️ Registry centralisé  
+        ✔️ Promotion contrôlée en production  
+        ✔️ Historique complet des runs  
+        ✔️ Auditabilité (git commit)
+        """)
+
+    st.markdown("---")
+
+    st.subheader("🔄 Cycle de vie du modèle")
+
+    st.markdown("""
+    1️⃣ Entraînement → `mlflow.start_run()`  
+    2️⃣ Log des paramètres & métriques  
+    3️⃣ Log du modèle via `mlflow.pyfunc.log_model()`  
+    4️⃣ Enregistrement dans le **Model Registry**  
+    5️⃣ Promotion automatique si métrique meilleure  
+    6️⃣ Chargement via alias `production`
+    """)
+
+    st.markdown("---")
+
+    st.subheader("🏷️ Model Registry & Alias Production")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.success("""
+        Le modèle n’est jamais appelé par numéro de version.
+
+        Il est chargé via :
+
+        models:/reco-films-itemcf-v2@production
+        """)
+
+    with col2:
+        st.success("""
+        👉 Décorrélation totale entre :
+        - code de serving
+        - version du modèle
+
+        La promotion modifie uniquement l’alias.
+        """)
+
+    st.markdown("---")
+
+    st.subheader("📈 Métriques loggées automatiquement")
+
+    st.markdown("""
+    - recall_10  
+    - ndcg_10  
+    - paramètres (k_neighbors, min_ratings…)  
+    - tags (git_commit)  
+    - artefacts modèle  
+    """)
+
+    st.markdown("---")
+
+    st.subheader("🚀 Promotion automatique")
+
+    st.info("""
+    Script `promote_best_model.py` :
+
+    - Compare les versions enregistrées
+    - Sélectionne la meilleure selon NDCG@10
+    - Met à jour l’alias `production`
+    """)
+
+    st.markdown("---")
+
+    key_takeaways("Valeur ajoutée MLflow dans ce projet :", [
+        "Traçabilité complète des expérimentations",
+        "Reproductibilité garantie",
+        "Déploiement sécurisé via alias",
+        "Approche alignée standards MLOps industriels",
+    ])    
 
    
 
-elif section == "Suivi des Expériences via MLflow":
+elif section == "Suivi des Expériences via MLflow old":
     slide_header(
         "Suivi des Expériences via MLflow",        
     )     
