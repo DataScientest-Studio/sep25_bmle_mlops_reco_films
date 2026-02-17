@@ -1,105 +1,109 @@
 #!/bin/bash
+export PYTHONUTF8=1
 
 # --- CONFIGURATION ---
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$SCRIPT_DIR"
-API_URL="http://127.0.0.1:8000"
 LOG_FILE="$PROJECT_DIR/pipeline.log"
 GIT_BRANCH="master"
 
 # Fonction pour logger
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
-# On s'assure d'être dans le bon dossier
 cd "$PROJECT_DIR"
-
 log "🚀 Démarrage du Pipeline MLOps..."
 
 # ==============================================================================
-# 0. MISE À JOUR DU CODE (GIT PULL)
+# 0. GIT UPDATE
 # ==============================================================================
-log "🔄 0. Récupération de la dernière version du code..."
-# On pull d'abord pour être sûr d'avoir les derniers scripts python de l'équipe
+log "🔄 0. Git Pull..."
 if git pull origin "$GIT_BRANCH"; then
     log "✅ Code à jour."
+    # On tente un DVC pull pour avoir le cache, mais ce n'est pas critique
+    # car l'ingestion va écraser les données raw de toute façon.
+    dvc pull >> "$LOG_FILE" 2>&1 || true 
 else
-    log "❌ Erreur lors du Git Pull. Arrêt du pipeline."
-    # On arrête tout, car lancer un training sur un code en conflit est dangereux
+    log "❌ Erreur Git Pull. Arrêt."
     exit 1
 fi
 
 # ==============================================================================
-# 1. DATA PIPELINE
+# 1. INGESTION (Source -> Local)
 # ==============================================================================
-log "📡 1. Lancement Ingestion & Versionning (/data)..."
+log "📡 1. Ingestion (Téléchargement + SQL)..."
 
-HTTP_CODE_DATA=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API_URL/data")
-
-if [ "$HTTP_CODE_DATA" -eq 200 ]; then
-    log "✅ Ingestion API & DVC Push OK"
+# On lance l'ingestion qui va TELECHARGER les fichiers
+if python -m src.ingestion.ingestion_movielens >> "$LOG_FILE" 2>&1; then
     
-    # --- COMMIT LOCAL : DATA ---
+    # --- SAFETY CHECK : Est-ce que le dossier est vide ? ---
+    if [ -z "$(ls -A data/raw)" ]; then
+       log "❌ CRITIQUE : Ingestion terminée mais data/raw est vide ! Arrêt."
+       exit 1
+    fi
+    log "✅ Ingestion et Téléchargement terminés."
+    
+    # --- VERSIONNING DVC (Local -> Remote) ---
+    log "📦 Versionning DVC (Raw Data)..."
+    dvc add data/raw >> "$LOG_FILE" 2>&1
+    dvc push data/raw.dvc >> "$LOG_FILE" 2>&1
+    
+    # --- GIT COMMIT ---
     if git diff --name-only | grep -q "data/raw.dvc"; then
-        log "📦 Nouveaux fichiers raw détectés. Commit local..."
+        log "📝 Mise à jour des données détectée. Commit..."
         git add data/raw.dvc
-        git commit -m "data: daily update raw dataset $(date '+%Y-%m-%d')"
-        log "✅ Commit Data effectué."
+        git commit -m "data: fresh ingestion $(date '+%Y-%m-%d')"
     else
-        log "ℹ️ Pas de changement Data."
+        log "ℹ️ Données identiques à la version précédente."
     fi
 else
-    log "❌ Erreur Ingestion (Code HTTP: $HTTP_CODE_DATA)"
+    log "❌ Erreur Ingestion."
     exit 1
 fi
 
 # ==============================================================================
-# 2. TRAINING PIPELINE
+# 2. TRAINING (Parquet)
 # ==============================================================================
-log "🏋️‍♂️ 2. Lancement Training (/training)..."
+log "📸 2. Snapshot & Training..."
 
-HTTP_CODE_TRAIN=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API_URL/training")
+# Création du Snapshot
+if python src/ingestion/create_snapshot.py >> "$LOG_FILE" 2>&1; then
+    
+    # Versionning du Parquet
+    if [ -f "data/training_set.parquet" ]; then
+        dvc add data/training_set.parquet >> "$LOG_FILE" 2>&1
+        dvc push data/training_set.parquet.dvc >> "$LOG_FILE" 2>&1
 
-if [ "$HTTP_CODE_TRAIN" -eq 200 ]; then
-    log "✅ Training API & DVC Push OK"
+        # Nettoyage vieux CSV s'ils existent
+        git rm data/training_set.csv.dvc 2>/dev/null || true
 
-    # --- COMMIT LOCAL : MODEL ---
-    if git diff --name-only | grep -q "data/training_set.csv.dvc"; then
-        log "📦 Nouveau Training Set détecté. Commit local..."
-        git add data/training_set.csv.dvc
-        git commit -m "model: update training set snapshot $(date '+%Y-%m-%d')"
-        log "✅ Commit Model effectué."
-    else
-        log "ℹ️ Pas de changement Model."
+        # Git Commit Model Data
+        if git diff --name-only | grep -q "data/training_set.parquet.dvc"; then
+            git add data/training_set.parquet.dvc
+            git commit -m "model: update training set $(date '+%Y-%m-%d')"
+        fi
     fi
 else
-    log "❌ Erreur Training (Code HTTP: $HTTP_CODE_TRAIN)"
+    log "❌ Erreur Snapshot."
+    exit 1
+fi
+
+# Entraînement
+log "🏋️‍♂️ Lancement Entraînement..."
+if python -m src.models.train_model2 >> "$LOG_FILE" 2>&1; then
+    log "✅ Entraînement terminé."
+else
+    log "❌ Erreur Training."
     exit 1
 fi
 
 # ==============================================================================
-# 3. PROMOTION DU MODÈLE
+# 3. PROMOTION & PUSH
 # ==============================================================================
-log "🏆 3. Promotion du meilleur modèle..."
+log "🏆 3. Promotion..."
 python -m src.models.promote_best_model >> "$LOG_FILE" 2>&1
 
-if [ $? -eq 0 ]; then
-    log "✅ Promotion terminée."
-else
-    log "❌ Erreur Promotion."
-    # On n'exit pas forcément ici, on veut peut-être quand même push les data
-fi
-
-# ==============================================================================
-# 4. SYNCHRONISATION FINALE (GIT PUSH)
-# ==============================================================================
-log "☁️ 4. Envoi des modifications vers GitHub (Push)..."
-
-# On push tout ce qui a été commité (Data et/ou Model) en une seule fois
-if git push origin "$GIT_BRANCH"; then
-    log "✅ Git Push réussi. Pipeline terminé avec succès."
-else
-    log "❌ Erreur lors du Git Push. Vérifie tes accès."
-    exit 1
-fi
+log "☁️ 4. Git Push Final..."
+git push origin "$GIT_BRANCH"

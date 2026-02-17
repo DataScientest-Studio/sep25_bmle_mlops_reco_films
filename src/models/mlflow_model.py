@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import mlflow.pyfunc
 
-
 class ItemCFPyFunc(mlflow.pyfunc.PythonModel):
     def __init__(self, n_reco: int = 10, min_user_ratings: int = 5, positive_threshold: float = 4.0):
         self.n_reco = n_reco
@@ -14,18 +13,22 @@ class ItemCFPyFunc(mlflow.pyfunc.PythonModel):
         self.popularity = None
 
     def load_context(self, context):
-        # Artefacts fournis par mlflow.pyfunc.log_model(artifacts=...)
-        item_neighbors = pd.read_csv(context.artifacts["item_neighbors"])
-        movie_popularity = pd.read_csv(context.artifacts["movie_popularity"])
+        # --- MODIFICATION PARQUET ---
+        # Pandas détecte automatiquement le format Parquet
+        print(f"[MODEL LOAD] Loading artifacts from: {context.artifacts}")
+        item_neighbors = pd.read_parquet(context.artifacts["item_neighbors"])
+        movie_popularity = pd.read_parquet(context.artifacts["movie_popularity"])
 
-        # dict: movieId -> list[(neighborMovieId, similarity)]
+        # Le reste de la logique reste identique (itération sur le DataFrame chargé)
         neighbors_dict = {}
+        # itertuples fonctionne pareil sur un DF chargé depuis Parquet
         for row in item_neighbors.itertuples(index=False):
             neighbors_dict.setdefault(int(row.movieId), []).append((int(row.neighborMovieId), float(row.similarity)))
         self.neighbors_dict = neighbors_dict
 
         # popularity triée
         self.popularity = movie_popularity.sort_values("bayes_score", ascending=False).reset_index(drop=True)
+        print("[MODEL LOAD] Loaded successfully.")
 
     def predict(self, context, model_input: pd.DataFrame) -> pd.DataFrame:
         """

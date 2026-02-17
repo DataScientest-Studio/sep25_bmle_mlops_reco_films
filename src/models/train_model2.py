@@ -1,11 +1,10 @@
 # ============================================================
-# TRAIN_MODEL2.PY - VERSION FINALE (ORDRE IMPORTS CORRIGÉ)
+# TRAIN_MODEL2.PY - VERSION PARQUET
 # ============================================================
 from __future__ import annotations
 
 import os
-# FIX CRITIQUE : Force l'utilisation de distutils standard.
-# Doit être placé juste après 'import os' mais AVANT 'import mlflow'
+# FIX CRITIQUE
 os.environ["SETUPTOOLS_USE_DISTUTILS"] = "stdlib"
 
 import sys
@@ -14,7 +13,6 @@ import numpy as np
 import pandas as pd
 import subprocess
 from datetime import datetime
-import yaml
 import mlflow
 import gc
 from sqlalchemy import create_engine, text
@@ -32,7 +30,7 @@ except ImportError:
     from src.models.mlflow_model import ItemCFPyFunc
 
 # ------------------------------------------------------------
-# CONFIGURATION GIT & CHEMINS
+# CONFIGURATION
 # ------------------------------------------------------------
 def configure_git_environment():
     if shutil.which("git"): return
@@ -98,19 +96,15 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         mlflow.log_param("min_ratings", min_ratings)
         mlflow.set_tag("git_commit", get_git_commit())
         
-        engine = create_engine(PG_URL)
-
-        # 1. LOAD
-        print("[INFO] Loading data...")
-        query = f'SELECT "userId", "movieId", rating FROM {SCHEMA}.current_ratings WHERE rating IS NOT NULL'
-        chunks = []
-        for chunk in pd.read_sql(query, con=engine, chunksize=500_000):
-            chunk["userId"] = chunk["userId"].astype("int32")
-            chunk["movieId"] = chunk["movieId"].astype("int32")
-            chunk["rating"] = chunk["rating"].astype("float32")
-            chunks.append(chunk)
-        ratings = pd.concat(chunks, ignore_index=True)
-        print(f"[OK] Rows: {len(ratings)}")
+        # 1. LOAD FROM PARQUET (Updated)
+        parquet_path = "data/training_set.parquet"
+        print(f"[INFO] Loading data from {parquet_path}...")
+        
+        if not os.path.exists(parquet_path):
+            raise FileNotFoundError(f"❌ Le fichier {parquet_path} n'existe pas. Lance d'abord create_snapshot.py")
+            
+        ratings = pd.read_parquet(parquet_path)
+        print(f"[OK] Rows loaded: {len(ratings)}")
 
         # 2. POPULARITY & SPLIT
         print("[INFO] Computing popularity...")
@@ -122,7 +116,7 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         train, test = train_test_split(ratings_filtered, test_size=0.2, random_state=42)
         train_movies_per_user = train.groupby("userId")["movieId"].apply(set).to_dict()
 
-        del ratings, chunks, ratings_filtered
+        del ratings, ratings_filtered
         gc.collect()
 
         # 3. KNN
@@ -183,39 +177,40 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         mlflow.log_metric("recall_10", np.mean(recalls) if recalls else 0)
         mlflow.log_metric("ndcg_10", np.mean(ndcgs) if ndcgs else 0)
 
-        # 6. LOGGING
+        # 6. LOGGING ARTIFACTS (PARQUET)
         os.makedirs("mlflow_artifacts", exist_ok=True)
-        item_neighbors_df.to_csv("mlflow_artifacts/item_neighbors.csv", index=False)
-        movie_popularity.to_csv("mlflow_artifacts/movie_popularity.csv", index=False)
+        # --- MODIF PARQUET ---
+        item_neighbors_df.to_parquet("mlflow_artifacts/item_neighbors.parquet", index=False)
+        movie_popularity.to_parquet("mlflow_artifacts/movie_popularity.parquet", index=False)
         
-        mlflow.log_artifact("mlflow_artifacts/item_neighbors.csv")
-        mlflow.log_artifact("mlflow_artifacts/movie_popularity.csv")
+        mlflow.log_artifact("mlflow_artifacts/item_neighbors.parquet")
+        mlflow.log_artifact("mlflow_artifacts/movie_popularity.parquet")
 
-        # 7. MODEL LOGGING (SANS CODE_PATH pour éviter l'erreur)
+        # 7. MODEL LOGGING
         print("[INFO] Logging PyFunc Model...")
         model_info = mlflow.pyfunc.log_model(
             artifact_path="model",
             python_model=ItemCFPyFunc(n_reco=10, min_user_ratings=5),
             artifacts={
-                "item_neighbors": "mlflow_artifacts/item_neighbors.csv",
-                "movie_popularity": "mlflow_artifacts/movie_popularity.csv",
+                # --- MODIF PARQUET ---
+                "item_neighbors": "mlflow_artifacts/item_neighbors.parquet",
+                "movie_popularity": "mlflow_artifacts/movie_popularity.parquet",
             },
-            # PAS DE code_path ICI
             registered_model_name=REGISTERED_MODEL_NAME
         )
         
         # 8. ALIAS PRODUCTION
         print("[INFO] Setting Alias 'production'...")
         client = mlflow.tracking.MlflowClient()
-        # On attend un peu pour être sûr que le modèle est bien créé
         latest_versions = client.get_latest_versions(REGISTERED_MODEL_NAME, stages=["None"])
         if latest_versions:
             latest_version = latest_versions[0].version
             client.set_registered_model_alias(REGISTERED_MODEL_NAME, "production", latest_version)
             print(f"[SUCCESS] Model v{latest_version} aliased as 'production'")
 
-        # 9. SAVE TO SQL
+        # 9. SAVE TO SQL (Pour l'API de prod, optionnel si l'API lit MLflow direct)
         print("[INFO] Saving to SQL for Production API...")
+        engine = create_engine(PG_URL)
         with engine.begin() as conn:
             conn.execute(text(f"DROP TABLE IF EXISTS {SCHEMA}.item_neighbors"))
             conn.execute(text(f"DROP TABLE IF EXISTS {SCHEMA}.movie_popularity"))

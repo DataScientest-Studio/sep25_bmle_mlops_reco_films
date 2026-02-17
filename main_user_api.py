@@ -1,174 +1,121 @@
 # ============================================================
-# MAIN_USER_API.PY - VERSION API JSON (POUR STREAMLIT)
+# MAIN_USER_API.PY
 # ============================================================
 import os
 import sys
 os.environ["PYTHONIOENCODING"] = "utf-8"
+
 import subprocess
 import logging
 import pandas as pd
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine
 
-# --- IMPORT DU PREDICT ---
+# --- IMPORTS LOCAUX ---
 try:
     from src.models.predict_model2 import predict as recommend_for_user
 except ImportError:
-    try:
-        from src.models.predict_model2 import recommend_for_user
-    except ImportError as e:
-        print(f"❌ ERREUR CRITIQUE D'IMPORT : {e}")
-        sys.exit(1)
+    sys.exit(1)
 
 from src.ingestion.ingestion_movielens import ingest_movielens
 
-# ------------------------------------------------------------
-# CONFIG LOGGING
-# ------------------------------------------------------------
+# --- CONFIG ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-# ------------------------------------------------------------
-# CONFIG & CACHE TITRES
-# ------------------------------------------------------------
 PG_URL = os.getenv("PG_URL", "postgresql+psycopg2://movie:movie@127.0.0.1:5432/movie_reco")
 
+# --- CACHE TITRES ---
 def load_titles_from_sql():
-    """Charge le mapping ID -> Titre en mémoire."""
     try:
-        logger.info(f"🔌 Connexion à la BDD pour charger les titres...")
         engine = create_engine(PG_URL)
-        query = "SELECT \"movieId\", \"title\" FROM raw.raw_movies"
-        movies_df = pd.read_sql(query, engine)
-        
-        if movies_df.empty:
-            return {}
-        
-        return dict(zip(movies_df["movieId"], movies_df["title"]))
-
-    except Exception as e:
-        logger.error(f"❌ Impossible de charger les titres : {e}")
-        return {}
+        df = pd.read_sql('SELECT "movieId", "title" FROM raw.raw_movies', engine)
+        if df.empty: return {}
+        return dict(zip(df["movieId"], df["title"]))
+    except: return {}
 
 TITLE_MAP = load_titles_from_sql()
-logger.info(f"✅ {len(TITLE_MAP)} films chargés en mémoire.")
-
 app = FastAPI(title="Movie Recommendation API")
 
-# ------------------------------------------------------------
-# ROOT
-# ------------------------------------------------------------
 @app.get("/")
 def home():
-    """Simple health check."""
-    return {
-        "status": "online",
-        "cache_size": len(TITLE_MAP),
-        "message": "Bienvenue sur l'API de Recommandation. Utilisez /recommend pour les prédictions."
-    }
+    return {"status": "online", "cache": len(TITLE_MAP)}
 
 # ------------------------------------------------------------
-# 1. AUTOMATISATION DATA (/data)
+# 1. ROUTE DATA (Ordre : Download -> DVC)
 # ------------------------------------------------------------
 @app.post("/data")
 def update_data_pipeline():
     report = {}
     
-    # --- MODIFICATION : VERSIONNING COMPLET (ADD + PUSH) ---
+    # ÉTAPE A : INGESTION (Téléchargement + SQL)
     try:
-        logger.info("👀 1. Capture des nouvelles données (DVC Add)...")
-        # On capture tout le dossier raw (nouveaux CSV du jour)
+        logger.info("🚀 Lancement Ingestion (Download + SQL)...")
+        ingest_movielens() # Cela télécharge les fichiers frais dans data/raw
+        report["ingestion"] = "Success (Downloaded & Inserted)"
+    except Exception as e:
+        logger.error(f"Ingestion Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Ingestion Failed: {str(e)}")
+
+    # ÉTAPE B : VERSIONNING (DVC)
+    # Maintenant que data/raw est plein, on peut l'ajouter
+    try:
+        logger.info("📦 DVC Add & Push...")
         subprocess.run(["dvc", "add", "data/raw"], check=True)
-        
-        logger.info("☁️ 2. Synchronisation Remote (DVC Push)...")
-        # On envoie les données sur le stockage distant pour les collègues
         subprocess.run(["dvc", "push", "data/raw.dvc"], check=True)
-        
-        report["dvc"] = "Captured & Pushed"
+        report["dvc"] = "Versioned & Pushed"
     except Exception as e:
-        logger.error(f"⚠️ DVC Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"DVC Error: {str(e)}")
-    # -------------------------------------------------------
+        logger.error(f"DVC Error: {e}")
+        # On ne bloque pas tout si DVC plante, car SQL est à jour
+        report["dvc"] = f"Failed: {str(e)}"
 
-    try:
-        logger.info("💾 Ingestion SQL...")
-        ingest_movielens()
-        report["ingestion"] = "OK"
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SQL Error: {str(e)}")
-
+    # Reload Cache
     global TITLE_MAP
     TITLE_MAP = load_titles_from_sql()
-    report["cache"] = f"Reloaded ({len(TITLE_MAP)} items)"
     
     return report
 
 # ------------------------------------------------------------
-# 2. TRAINING (/training)
+# 2. ROUTE TRAINING (Parquet)
 # ------------------------------------------------------------
 @app.post("/training")
 def training():
     python_exec = sys.executable 
     try:
-        # 1. Snapshot
-        logger.info("📸 Création du snapshot...")
+        logger.info("📸 Création du snapshot Parquet...")
         subprocess.run([python_exec, "src/ingestion/create_snapshot.py"], check=True)
         
-        # 2. DVC Add (Versionning local)
-        logger.info("📝 DVC Add...")
-        subprocess.run(["dvc", "add", "data/training_set.csv"], check=True)
-        
-        # --- AJOUT : DVC PUSH (Pour synchroniser le dataset d'entrainement) ---
-        logger.info("☁️ DVC Push...")
-        subprocess.run(["dvc", "push", "data/training_set.csv.dvc"], check=True)
-        # ----------------------------------------------------------------------
+        logger.info("📦 DVC Add (Training Set)...")
+        subprocess.run(["dvc", "add", "data/training_set.parquet"], check=True)
+        subprocess.run(["dvc", "push", "data/training_set.parquet.dvc"], check=True)
 
-        # 4. Train
         logger.info("🏃‍♂️ Entraînement...")
         subprocess.run([python_exec, "-m", "src.models.train_model2", "--n-neighbors", "20"], check=True)
         
-        return {"status": "success", "message": "Pipeline complet terminé (Data Pushed & Trained)."}
+        return {"status": "success", "message": "Training Complete"}
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"Pipeline Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ------------------------------------------------------------
-# 3. PREDICTION (/recommend) -> RETOURNE DU JSON
+# 3. ROUTE PREDICT
 # ------------------------------------------------------------
 @app.get("/recommend")
 def recommend(user_id: int, top_n: int = 5):
-    """
-    Retourne un JSON exploitable par Streamlit.
-    """
-    # Vérif cache
     if not TITLE_MAP:
-        raise HTTPException(status_code=503, detail="Cache vide. Lancez /data d'abord.")
+        raise HTTPException(status_code=503, detail="Cache vide. Lancez /data.")
 
-    # Appel Modèle
     try:
         result = recommend_for_user(user_id=user_id, top_n=top_n)
     except Exception as e:
-        logger.error(f"Prediction Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    raw_recos = result.get("recommendations", [])
-    
-    # Enrichissement avec les Titres pour Streamlit
-    enriched_recos = []
-    for item in raw_recos:
-        m_id = item.get("movieId")
-        score = item.get("score", 0.0)
-        
-        enriched_recos.append({
-            "movie_id": m_id,
-            "title": TITLE_MAP.get(m_id, f"Unknown Movie ({m_id})"),
-            "score": round(score, 3) # Arrondi pour être propre
+    enriched = []
+    for item in result.get("recommendations", []):
+        mid = item.get("movieId")
+        enriched.append({
+            "movie_id": mid,
+            "title": TITLE_MAP.get(mid, f"Unknown ({mid})"),
+            "score": round(item.get("score", 0.0), 3)
         })
 
-    return {
-        "user_id": user_id,
-        "count": len(enriched_recos),
-        "recommendations": enriched_recos
-    }
+    return {"user_id": user_id, "recommendations": enriched}
