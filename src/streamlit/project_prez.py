@@ -25,6 +25,8 @@ ROOT = Path(__file__).resolve().parents[2]
 # =========================
 # Figures Visualization (PNG)
 # =========================
+MOVIELENS_IMG = ROOT / "src" / "streamlit" / "movielens.png"
+DATA_IMG = ROOT / "src" / "streamlit" / "pipeline_data_IMG.png"
 viz1_IMG = ROOT / "Reports" / "figures" / "visualize_Figure_1.png"
 viz2_IMG = ROOT / "Reports" / "figures" / "visualize_Figure_2.png"
 
@@ -40,7 +42,7 @@ st.set_page_config(
     layout="wide",
 )
 
-APP_TITLE = "Création d'un système de recommandation de films"
+APP_TITLE = "🎬 Création d'un système de recommandation de films"
 N_SAMPLES = 300
 
 
@@ -120,18 +122,24 @@ png_map = list_pngs_in_known_dirs()
 st.sidebar.header("🧭 Navigation") ## DEFINITION DES CHAPITRES 
 SECTIONS = [
     "Contexte & objectifs",
+    "Pipeline d'ingestion de données",
+    "Bases de données PostgreSQL",
     "Modèle & métriques d’évaluation",
-    "Bases de données",
-    "Suivi des Expériences & Versioning",    
+    "Suivi des Expériences via MLflow",    
     "API user & DS",
     "Monitoring & maintenance",
-    "Architecture MLOps",
+    "Conclusion & perspectives",
 ]
 section = st.sidebar.radio("Aller à :", SECTIONS, index=0)
 
 st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Ressources (soutenance)")
-st.sidebar.caption("")
+st.sidebar.header("⚙️ Soutenance Projet MLOps — sep25_bmle")
+st.sidebar.caption("""
+                   Pierre Barbetti      
+                   Raphaël Da Silva      
+                   Martine Mateus      
+                   Laurent Piacentile
+                   """)
 
 
 
@@ -143,31 +151,131 @@ if section == "Contexte & objectifs":
         "Contexte & objectifs",
     )
     
+
     st.markdown("""
-# 🧩 **Contexte**
-### 3ème projet fil rouge de la formation ML Engineer, dédié aux pratiques MLOps, articulé autour de **4 phases** :
-1.  les fondations : les environnements de travail, les pipelines de données et le modèle de ML
-2.  le suivi des expériences & le versioning (code, données, modèles)
-3.  l'orchestration et le déploiement des microservices
-4.  la surveillance et la maintenance du système en production
+    ## 🧪 **Cadre du projet**""")
+    col1, col2 = st.columns(2)
+    with col1:
+        if MOVIELENS_IMG.exists():
+            st.image(
+                str(MOVIELENS_IMG),
+                use_container_width=True
+            )
+        else:
+            st.error("❌ MOVIELENS.png introuvable")
 
-
-# 🎯 **Enjeux MLOps**
-### Focus non pas sur la performance du modèle ML mais sur la performance de l'architecture construite autour du modèle :
--  les microservices doivent fonctionner de manière fluide et intégrée
--  les environnements doivent être reproductibles avec des flux de travail automatisés
--  la surveillance doit être continue, avec une stratégie de maintenance efficace pour assurer la fiabilité à long terme du modèle
-
-
-# 🧪 **Cadre du projet**
-### Objectif : construire un système de recommandation de films en production, intégrant les meilleures pratiques MLOps.
-- Application de **collaborative filtering** et/ou **content based filtering**.
-- Finalité : disposer d'une application de recommandation de films pour les utilisateurs.
-- Aspects spécifiques du projet :  
+    with col2:  
+        st.markdown("""
+    ### Objectif : construire un système de recommandation de films en production
+    - Application de **collaborative filtering** et/ou **content based filtering**.
+    - Finalité : disposer d'une application de recommandation de films pour les utilisateurs.
+    - Aspects spécifiques du projet :  
               - traiter la problématique du Data Drift,  
               - monitorer le modèle (bonne vs mauvaise recommandation),  
               - résoudre la problématique de cold-start pour les nouveaux utilisateurs et les nouveaux films.
-""")
+    """)
+        
+            
+
+    st.markdown("""
+    ## 🎯 **Enjeux : projet dédié aux pratiques MLOps**
+    ### Focus sur la performance de l'architecture construite autour du modèle :
+    -  les microservices doivent fonctionner de manière fluide et intégrée
+    -  les environnements doivent être reproductibles avec des flux de travail automatisés
+    -  la surveillance doit être continue, avec une stratégie de maintenance efficace pour assurer la fiabilité à long terme du modèle
+    -  la documentation doit être claire et complète pour faciliter la prise en main du projet par les équipes de développement et de data science
+    """)
+
+    st.subheader("Schéma d'implémentation de l'architecture MLOps")
+    if archi_IMG.exists():
+        st.image(
+            str(archi_IMG),
+            caption="Schéma d'implémentation de l'architecture MLOps",
+            use_container_width=True
+        )
+    else:
+        st.error("❌ architecture_MLOps.png introuvable")
+
+   
+
+elif section == "Pipeline d'ingestion de données":
+    slide_header(
+        "🧷 Pipeline d'ingestion de données",        
+    )
+    st.subheader("Ingestion de nouvelles données")
+    col1, col2 = st.columns(2)
+    with col1:
+        if DATA_IMG.exists():
+            st.image(
+                str(DATA_IMG),
+                caption="Schéma de la base de données PostgreSQL",
+                use_container_width=True
+            )
+        else:
+            st.error("❌ pipeline_data_IMG.png introuvable")
+    with col2:
+        st.success("""
+            **Automatisation du processus d'ingestion de nouvelles données via un cronjob**  
+            - Insertion automatique de nouvelles données dans la base PostgreSQL
+            - Versioning des données 
+            - Processus de validation des données (checks qualité, alertes en cas de données manquantes ou incohérentes)
+        """)
+
+
+
+
+
+
+elif section == "Bases de données PostgreSQL":
+    slide_header(
+        "Bases de données",        
+    )    
+    st.subheader("Architecture de la base de données PostgreSQL")
+    col1, col2 = st.columns(2)
+    with col1:
+        if SQL1_IMG.exists():
+            st.image(
+                str(SQL1_IMG),
+                caption="Schéma de la base de données PostgreSQL",
+                use_container_width=True
+            )
+        else:
+            st.error("❌ SQL1_IMG.png introuvable")
+    with col2:
+        st.success("""
+            **Versioning des données**  
+            - 
+        """)
+
+    st.write("---")
+    st.subheader("📊 Exploration des données MovieLens")
+    st.markdown("*https://grouplens.org/datasets/movielens/20m/** ")
+    col1, col2 = st.columns(2)
+    with col1:
+        if viz1_IMG.exists():
+            st.image(
+                str(viz1_IMG),
+                caption="MovieLens — En chiffres",
+                use_container_width=True
+            )
+            st.info("""
+            **Entre 1995 et 2015  :  20 millions de notations   -  138 000 noteurs  -  27 000 films évalués.**  
+            Sur les dernières années : entre 120 et 220 votants par jour, 8 et 16 notes par session de notation, plus de 70 notes par utilisateur par an.
+            """)
+        else:
+            st.error("❌ viz1_IMG.png introuvable")
+    with col2:
+        if viz2_IMG.exists():
+            st.image(
+                str(viz2_IMG),
+                caption="MovieLens — En graphiques",
+                use_container_width=True
+            )
+        else:
+            st.error("❌ viz2_IMG.png introuvable")
+
+
+   
 
 
 
@@ -257,80 +365,22 @@ elif section == "Modèle & métriques d’évaluation":
     
 
    
-  
 
-
-
-
-elif section == "Bases de données":
+elif section == "Suivi des Expériences via MLflow":
     slide_header(
-        "Bases de données",        
-    )
-    
-    st.subheader("📊 Exploration des données MovieLens")
-    st.markdown("*https://grouplens.org/datasets/movielens/20m/** ")
-    col1, col2 = st.columns(2)
-    with col1:
-        if viz1_IMG.exists():
-            st.image(
-                str(viz1_IMG),
-                caption="MovieLens — En chiffres",
-                use_container_width=True
-            )
-            st.info("""
-            **Entre 1995 et 2015  :  20 millions de notations   -  138 000 noteurs  -  27 000 films évalués.**  
-            Sur les dernières années : entre 120 et 220 votants par jour, 8 et 16 notes par session de notation, plus de 70 notes par utilisateur par an.
-            """)
-        else:
-            st.error("❌ viz1_IMG.png introuvable")
-    with col2:
-        if viz2_IMG.exists():
-            st.image(
-                str(viz2_IMG),
-                caption="MovieLens — En graphiques",
-                use_container_width=True
-            )
-        else:
-            st.error("❌ viz2_IMG.png introuvable")
-
-
-    st.write("---")
-    st.subheader("Ingestion de nouvelles données")
-    col1, col2 = st.columns(2)
-    with col1:
-        if SQL1_IMG.exists():
-            st.image(
-                str(SQL1_IMG),
-                caption="Schéma de la base de données PostgreSQL",
-                use_container_width=True
-            )
-        else:
-            st.error("❌ SQL1_IMG.png introuvable")
-    with col2:
-        # Simulation d'insertion de nouvelles données dans la base PostgreSQL
-        st.write("---")
-
-
-
-
-elif section == "Suivi des Expériences & Versioning":
-    slide_header(
-        "Suivi des Expériences & Versioning",        
+        "Suivi des Expériences via MLflow",        
     )     
     st.write("""
         ### Objectifs  
         Tracer efficacement les expériences d'entraînement  
         Versionner données et modèles  
         Créer des pipelines reproductibles  
-        
-        ### Composants Clés à Implémenter  
-        Système de suivi des expériences  
-        Versioning des données  
-        Structure des pipelines  
-        Processus d'ingénierie des features  
+             
+        ### Outils utilisés
+             
+        ### Screenshots de l'interface MLflow / Démo
+  
     """)
-
-
 
 
 
@@ -356,52 +406,45 @@ elif section ==  "Monitoring & maintenance":
         "📈 Monitoring & maintenance",
     )
 
-    st.write("""
-             ## Au cours du déploiement de l’application, il sera nécessaire de porter une attention particulière au fait que   
-        les différentes parties du projet fonctionnent correctement individuellement (tests unitaires),   
-        et que les performances de l’application soient toujours en adéquation avec le cahier des charges.   
-        
-        ### Détail des tests unitaires pour tester le bon fonctionnnement et le temps de réponse des différentes parties du projet : 
-           le modèle lors de l’entraînement  
-           le modèle lors de la prédiction  
-           les différents endpoints de l’API  
-           le process d’ingestion de nouvelles données  
 
-        ## Mais également le monitoring du modèle et les décisions qui en découlent :  
-           Comment évaluer la performance du modèle à un instant donné ? 
-               (évaluation sur l’intégralité du jeu de test, évaluation sur les données les plus récentes)  
-           Quand faut-il ré-entraîner le modèle ? (périodiquement, lorsque les performances sont trop faibles)  
-           Sur quelles données faut-il ré-entraîner le modèle ? 
-               (sur l’intégralité du jeu de données, sur un échantillon des données les plus récentes…)   
-           Que faire lorsque le modèle n’atteint pas le seuil de performance requis ? 
-               (envoyer un mail d’alerte aux personnes concernées, bloquer l’application)  
+    st.write("""
+            ## Stratégie de déploiement du monitoring et de la maintenance du modèle en production   
+             
+            ### Monitoring du processus d’ingestion de nouvelles données
+                - statut de la dernière ingestion (succès/échec)
+                - durée de la dernière ingestion
+                - nombre de lignes chargées lors de la dernière ingestion
+                - nombre total de notes en base (indicateur de croissance du dataset)
+                
+            ### Vérification qualité des données
+                - nombre de checks qualité réalisés 
+                - nombre de checks qualité ayant échoué
+                - statut du dernier run de vérification qualité (succès/échec)
+             
+            ### KPI & Monitoring drift data
+                - nombre de notes mensuelles (indicateur de croissance du dataset)
+                - note moyenne mensuelle (indicateur de dérive potentielle des notes)
+             
+            ### Monitoring du modèle en production
+                - durée du dernier entraînement
+                - statut du dernier entraînement (succès/échec)
+                - precision@K, recall@K et ndcg@K du train du modèle en production
+                - coverage users du modèle en production
+                - nouveauté des recommandations (ex : proportion de films recommandés qui n’ont pas été vus par l’utilisateur)
+    
+
         """)
 
 
 
 
-elif section == "Architecture MLOps":
+elif section == "Conclusion & perspectives":
     slide_header(
-        "Schéma d'implémentation de l'architecture MLOps",
+        "Conclusion & perspectives",
     )    
 
-    if archi_IMG.exists():
-            st.image(
-                str(archi_IMG),
-                caption="Schéma d'implémentation de l'architecture MLOps",
-                use_container_width=True
-            )
-    else:
-        st.error("❌ architecture_MLOps.png introuvable")
-
-    st.write("""# schéma récapitulatif du projet, qui intègre les différentes composantes du projet et leurs interactions. 
-    # Ce dernier n’a pas besoin d’être normalisé, mais devra respecter un code couleur compréhensible 
-    # et se doit d’être le plus exhaustif possible. 
-    # Vous pourrez pour ce faire vous aider des outils https://app.diagrams.net/ ou https://docs.google.com/drawings
-             """)
-
-   
-    st.subheader("Composantes clés de l'architecture MLOps")
+     
+    st.subheader("Composantes clés de l'architecture MLOps : MVP vs Next steps")
     col1, col2 = st.columns(2)
     with col1:
         st.info("""
@@ -447,10 +490,18 @@ elif section == "Architecture MLOps":
 
 
 
-        key_takeaways("**Aspects spécifiques du projet :**", [
-            "Data Drift",
-            "Monitoring", 
-            "Cold-start (nouveaux utilisateurs et nouveaux films)"]
+        key_takeaways("Aspects spécifiques du projet :", [
+            """Data Drift :**  
+            - mise à jour des données et actualisation du modèle quotidiennes,  
+            - monitoring pour détecter les dérives  
+            """,
+            """Evaluation du modèle de recommandation :**  
+                precision@K, recall@K et ndcgs@K pour évaluer la qualité des recommandations  
+            """, 
+            """Cold-start :**  
+            - nouveaux utilisateurs : recommandation basée sur un score de popularité bayésien  
+            - nouveaux films : recommandés dès lors qu’ils ont reçu un nombre minimum de notes  
+            """]
             )
 
 

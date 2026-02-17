@@ -8,6 +8,7 @@ import argparse
 import json
 import pandas as pd
 import mlflow
+from mlflow.tracking import MlflowClient
 from sqlalchemy import create_engine
 
 # Nom du modèle dans MLflow
@@ -88,6 +89,50 @@ def predict(user_id: int, top_n: int = 10) -> dict:
     recos = reco_df[["movieId", "score"]].to_dict(orient="records")
 
     return {"userId": user_id, "recommendations": recos}
+
+
+def get_production_model_metadata():
+    """
+    Récupère les métadonnées et la config du modèle actuellement en production via MLflow.
+    Utilisé par l'API pour l'observabilité.
+    """
+    mlflow_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    mlflow.set_tracking_uri(mlflow_uri)
+    client = MlflowClient()
+    
+    try:
+        # 1. Récupérer la version du modèle avec l'alias 'production'
+        mv = client.get_model_version_by_alias(REGISTERED_MODEL_NAME, "production")
+        
+        # 2. Récupérer les infos du Run associé
+        run = client.get_run(mv.run_id)
+        
+        # 3. Extraction de la Config (Hyperparamètres)
+        config = {
+            "k_neighbors": run.data.params.get("k_neighbors"),
+            "min_ratings": run.data.params.get("min_ratings"),
+            "distance_metric": "cosine", 
+            "algorithm": "brute"
+        }
+
+        # 4. Extraction des Métadonnées (Infos du run, métriques, version)
+        metadata = {
+            "model_name": REGISTERED_MODEL_NAME,
+            "model_version": mv.version,
+            "run_id": mv.run_id,
+            "creation_timestamp": pd.to_datetime(mv.creation_timestamp, unit="ms").isoformat(),
+            "git_commit": run.data.tags.get("git_commit", "unknown"),
+            "metrics": {
+                "recall_at_10": round(float(run.data.metrics.get("recall_10", 0)), 4),
+                "ndcg_at_10": round(float(run.data.metrics.get("ndcg_10", 0)), 4)
+            }
+        }
+        
+        return {"config": config, "metadata": metadata}
+
+    except Exception as e:
+        print(f"[WARNING] Impossible de récupérer les métadonnées MLflow: {e}")
+        return None
 
 
 if __name__ == "__main__":
