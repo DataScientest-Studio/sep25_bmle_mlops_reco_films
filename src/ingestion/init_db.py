@@ -5,59 +5,49 @@ from sqlalchemy import create_engine, text
 PG_URL = os.getenv("PG_URL", "postgresql+psycopg2://movie:movie@127.0.0.1:5432/movie_reco")
 
 def init_database():
-    engine = create_engine(PG_URL)
-    with engine.begin() as conn:
-        # 1. On nettoie tout
-        conn.execute(text("DROP SCHEMA IF EXISTS raw CASCADE;"))
-        conn.execute(text("CREATE SCHEMA raw;"))
-
-        print("🏗️  Création des tables (Mode Historique - Append Only)...")
-
-        # Table RATINGS : On stocke TOUT l'historique.
-        # Notez l'absence de PRIMARY KEY sur (userId, movieId).
-        # On ajoute une colonne 'ingested_at' pour savoir QUAND on a reçu la donnée.
-        conn.execute(text("""
-            CREATE TABLE raw.raw_ratings (
-                "userId" BIGINT,
-                "movieId" BIGINT,
-                "rating" FLOAT,
-                "timestamp" BIGINT,
-                "ingested_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """))
-
-        # Table MOVIES
-        conn.execute(text("""
-            CREATE TABLE raw.raw_movies (
-                "movieId" BIGINT,
-                "title" TEXT,
-                "genres" TEXT,
-                "ingested_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """))
+    # AUTOCOMMIT est vital ici pour forcer la création du schéma immédiatement
+    engine = create_engine(PG_URL, isolation_level="AUTOCOMMIT")
+    
+    with engine.connect() as conn:
+        print("🏗️  Vérification de la structure de la base de données...")
         
-        # (On fait pareil pour tags, links, etc. si besoin)
+        # 1. Création du schéma 'raw'
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS raw;"))
 
-        print("👀 Création des VUES (Ce que l'API va utiliser)...")
+        # 2. Création des tables
+        tables = {
+            "raw_ratings": '"userId" BIGINT, "movieId" BIGINT, rating FLOAT, timestamp BIGINT',
+            "raw_movies": '"movieId" BIGINT, title TEXT, genres TEXT',
+            "raw_tags": '"userId" BIGINT, "movieId" BIGINT, tag TEXT, timestamp BIGINT',
+            "raw_links": '"movieId" BIGINT, "imdbId" BIGINT, "tmdbId" FLOAT',
+            "raw_genome_scores": '"movieId" BIGINT, "tagId" BIGINT, relevance FLOAT',
+            "raw_genome_tags": '"tagId" BIGINT, tag TEXT'
+        }
 
-        # VUE MAGIQUE : current_ratings
-        # Cette vue ne garde que la note la plus récente pour chaque couple User/Movie.
-        # L'API lira "raw.current_ratings" et aura toujours la donnée fraîche.
+        for table_name, columns in tables.items():
+            conn.execute(text(f"""
+                CREATE TABLE IF NOT EXISTS raw.{table_name} (
+                    {columns},
+                    ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """))
+
+        print("👀 Mise à jour des VUES...")
         conn.execute(text("""
-            CREATE VIEW raw.current_ratings AS
+            CREATE OR REPLACE VIEW raw.current_ratings AS
             SELECT DISTINCT ON ("userId", "movieId") *
             FROM raw.raw_ratings
-            ORDER BY "userId", "movieId", "ingested_at" DESC;
+            ORDER BY "userId", "movieId", ingested_at DESC;
         """))
 
         conn.execute(text("""
-            CREATE VIEW raw.current_movies AS
+            CREATE OR REPLACE VIEW raw.current_movies AS
             SELECT DISTINCT ON ("movieId") *
             FROM raw.raw_movies
-            ORDER BY "movieId", "ingested_at" DESC;
+            ORDER BY "movieId", ingested_at DESC;
         """))
 
-    print("✅ Base prête : Historique complet + Vue actuelle.")
+    print("✅ Base de données prête.")
 
 if __name__ == "__main__":
     init_database()

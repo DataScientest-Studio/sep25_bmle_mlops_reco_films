@@ -1,5 +1,5 @@
 # ============================================================
-# TRAIN_MODEL2.PY - VERSION PARQUET
+# TRAIN_MODEL2_OPTIMIZED.PY (MEMORY SAFE VERSION)
 # ============================================================
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.model_selection import train_test_split
 import argparse
 import mlflow.pyfunc
+from collections import defaultdict
 
 # Import local sécurisé
 try:
@@ -60,24 +61,30 @@ def get_git_commit() -> str:
     except: return "unknown"
 
 def compute_bayesian_popularity(ratings: pd.DataFrame) -> pd.DataFrame:
+    # Optimisation: float32 pour les calculs
     stats = ratings.groupby("movieId")["rating"].agg(["count", "mean"]).reset_index()
     C = stats["count"].mean()
     M = stats["mean"].mean()
-    stats["bayes_score"] = (C * M + stats["count"] * stats["mean"]) / (C + stats["count"])
-    return stats.rename(columns={"count": "n_ratings", "mean": "mean_rating"})[["movieId", "n_ratings", "mean_rating", "bayes_score"]]
+    # Calcul vectorisé
+    stats["bayes_score"] = ((C * M + stats["count"] * stats["mean"]) / (C + stats["count"])).astype("float32")
+    
+    result = stats.rename(columns={"count": "n_ratings", "mean": "mean_rating"})
+    # Nettoyage types
+    result["n_ratings"] = result["n_ratings"].astype("int32")
+    result["mean_rating"] = result["mean_rating"].astype("float32")
+    return result[["movieId", "n_ratings", "mean_rating", "bayes_score"]]
 
-def recall_at_10(recos, truth):
-    if not truth: return 0
-    return len(set(recos[:10]) & set(truth)) / len(set(truth))
+def recall_at_10(recos, truth_set):
+    if not truth_set: return 0.0
+    return len(set(recos[:10]) & truth_set) / len(truth_set)
 
-def ndcg_at_10(recos, truth):
-    if not truth: return 0
+def ndcg_at_10(recos, truth_set):
+    if not truth_set: return 0.0
     dcg = 0.0
-    truth_set = set(truth)
     for i, m in enumerate(recos[:10]):
-        if m in truth_set: dcg += 1 / np.log2(i + 2)
-    idcg = sum(1 / np.log2(i + 2) for i in range(min(len(truth), 10)))
-    return dcg / idcg if idcg > 0 else 0
+        if m in truth_set: dcg += 1.0 / np.log2(i + 2)
+    idcg = sum(1.0 / np.log2(i + 2) for i in range(min(len(truth_set), 10)))
+    return dcg / idcg if idcg > 0 else 0.0
 
 # ------------------------------------------------------------
 # TRAINING
@@ -96,126 +103,195 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         mlflow.log_param("min_ratings", min_ratings)
         mlflow.set_tag("git_commit", get_git_commit())
         
-        # 1. LOAD FROM PARQUET (Updated)
+        # 1. LOAD FROM PARQUET (OPTIMISÉ)
         parquet_path = "data/training_set.parquet"
         print(f"[INFO] Loading data from {parquet_path}...")
         
         if not os.path.exists(parquet_path):
-            raise FileNotFoundError(f"❌ Le fichier {parquet_path} n'existe pas. Lance d'abord create_snapshot.py")
+            raise FileNotFoundError(f"❌ Le fichier {parquet_path} n'existe pas.")
             
-        ratings = pd.read_parquet(parquet_path)
+        # Chargement sélectif des colonnes + typage immédiat pour économiser la RAM
+        ratings = pd.read_parquet(
+            parquet_path, 
+            columns=["userId", "movieId", "rating"]
+        )
+        ratings["rating"] = ratings["rating"].astype("float32")
+        ratings["userId"] = ratings["userId"].astype("int32")
+        ratings["movieId"] = ratings["movieId"].astype("int32")
+        
         print(f"[OK] Rows loaded: {len(ratings)}")
 
         # 2. POPULARITY & SPLIT
         print("[INFO] Computing popularity...")
         movie_popularity = compute_bayesian_popularity(ratings)
         
-        keep_movies = ratings["movieId"].value_counts()[lambda x: x >= min_ratings].index
-        ratings_filtered = ratings[ratings["movieId"].isin(keep_movies)].copy()
+        # Filtrage
+        counts = ratings["movieId"].value_counts()
+        keep_movies = counts[counts >= min_ratings].index
+        ratings = ratings[ratings["movieId"].isin(keep_movies)].copy()
         
-        train, test = train_test_split(ratings_filtered, test_size=0.2, random_state=42)
-        train_movies_per_user = train.groupby("userId")["movieId"].apply(set).to_dict()
-
-        del ratings, ratings_filtered
+        # Split
+        train, test = train_test_split(ratings, test_size=0.2, random_state=42)
+        
+        # --- FIX MEMOIRE : On ne construit PAS l'historique global ici ---
+        # Ancienne ligne supprimée : train_movies_per_user = ...
+        
+        # Nettoyage immédiat
+        del ratings, counts, keep_movies
         gc.collect()
 
-        # 3. KNN
-        print("[INFO] Training KNN...")
-        user_ids = train["userId"].unique()
-        movie_ids = train["movieId"].unique()
+        # 3. SPARSE MATRIX (OPTIMISÉ VIA CATEGORICALS)
+        print("[INFO] Building Sparse Matrix...")
         
-        u_map = {u: i for i, u in enumerate(user_ids)}
-        m_map = {m: j for j, m in enumerate(movie_ids)}
-        inv_m_map = {j: m for m, j in m_map.items()}
-
-        rows = train["userId"].map(u_map).values
-        cols = train["movieId"].map(m_map).values
+        # Utilisation de Categorical pour mapper ID -> Index
+        train["user_idx"] = train["userId"].astype("category")
+        train["movie_idx"] = train["movieId"].astype("category")
+        
+        # Récupération des mappings
+        user_ids_map = train["user_idx"].cat.categories # Index -> Real UserID
+        movie_ids_map = train["movie_idx"].cat.categories # Index -> Real MovieID
+        
+        # Création matrice
+        rows = train["movie_idx"].cat.codes.values # Items en lignes
+        cols = train["user_idx"].cat.codes.values  # Users en colonnes
         vals = train["rating"].values
         
-        X_iu = csr_matrix((vals, (cols, rows)), shape=(len(movie_ids), len(user_ids)))
+        n_items = len(movie_ids_map)
+        n_users = len(user_ids_map)
         
+        X_iu = csr_matrix((vals, (rows, cols)), shape=(n_items, n_users), dtype=np.float32)
+        
+        # Attention : On garde 'train' pour l'évaluation plus tard, mais on supprime les colonnes inutiles
+        train = train[["userId", "movieId"]] 
+        del rows, cols, vals
+        gc.collect()
+
+        # 4. KNN TRAINING
+        print("[INFO] Training KNN...")
+        # algorithm='brute' est souvent plus stable en mémoire pour des matrices larges
         nn = NearestNeighbors(n_neighbors=k_neighbors+1, metric="cosine", algorithm="brute", n_jobs=-1)
         nn.fit(X_iu)
 
-        # 4. NEIGHBORS
-        print("[INFO] Generating Neighbors...")
+        # 5. GENERATING NEIGHBORS
+        print("[INFO] Generating Neighbors (Vectorized)...")
         dists, idxs = nn.kneighbors(X_iu)
-        neighbors_list = []
-        neighbors_dict = {}
+        
+        # Nettoyage: On n'a plus besoin du modèle KNN ni de la grosse matrice
+        del nn, X_iu
+        gc.collect()
+        
+        # -- Vectorisation de la création du DataFrame --
+        neighbor_indices = idxs[:, 1:].flatten() 
+        neighbor_dists = dists[:, 1:].flatten()
+        
+        source_indices = np.repeat(np.arange(n_items), k_neighbors)
+        
+        source_real_ids = movie_ids_map[source_indices]
+        neighbor_real_ids = movie_ids_map[neighbor_indices]
+        similarities = (1.0 - neighbor_dists).astype("float32")
+        
+        item_neighbors_df = pd.DataFrame({
+            "movieId": source_real_ids,
+            "neighborMovieId": neighbor_real_ids,
+            "similarity": similarities
+        })
+        
+        # Nettoyage tableaux numpy intermédiaires
+        del dists, idxs, neighbor_indices, neighbor_dists, source_indices
+        gc.collect()
 
-        for i in range(len(movie_ids)):
-            src_m = inv_m_map[i]
-            m_neighbors = []
-            for r in range(1, k_neighbors+1):
-                nb_m = inv_m_map[idxs[i, r]]
-                sim = 1.0 - dists[i, r]
-                neighbors_list.append((src_m, nb_m, float(sim)))
-                m_neighbors.append((nb_m, float(sim)))
-            neighbors_dict[src_m] = m_neighbors
-            
-        item_neighbors_df = pd.DataFrame(neighbors_list, columns=["movieId", "neighborMovieId", "similarity"])
-
-        # 5. EVALUATION
+        # 6. EVALUATION (Optimisée Lazy Loading)
         print("[INFO] Evaluating...")
+        
+        # Conversion DataFrame -> Dict pour accès rapide O(1)
+        np_neighbors = item_neighbors_df.values 
+        temp_dict = defaultdict(list)
+        for row in np_neighbors:
+             # row[0] = source, row[1] = target, row[2] = sim
+             temp_dict[int(row[0])].append((int(row[1]), float(row[2])))
+        neighbors_dict = dict(temp_dict)
+        del temp_dict, np_neighbors
+        
+        # Sélection d'un échantillon
         sample_users = test["userId"].unique()[:1000]
         recalls, ndcgs = [], []
         
+        # --- FIX MEMOIRE : Construction de l'historique UNIQUEMENT pour l'échantillon ---
+        print(f"[INFO] Building partial history for {len(sample_users)} users...")
+        
+        # Filtre train pour ne garder que l'historique des users testés
+        partial_train = train[train["userId"].isin(sample_users)]
+        train_movies_per_user = partial_train.groupby("userId")["movieId"].apply(set).to_dict()
+        
+        # Filtre test aussi
+        partial_test = test[test["userId"].isin(sample_users)]
+        test_truth_dict = partial_test.groupby("userId")["movieId"].apply(set).to_dict()
+
+        # On peut supprimer train/test complets maintenant
+        del train, test, partial_train, partial_test
+        gc.collect()
+
         for u in sample_users:
             hist = train_movies_per_user.get(u, set())
-            truth = test[test["userId"]==u]["movieId"].tolist()
-            if not hist or not truth: continue
+            truth_set = test_truth_dict.get(u, set())
+            
+            if not hist or not truth_set: continue
             
             scores = {}
             for m in hist:
                 for (rec, sim) in neighbors_dict.get(m, []):
-                    if rec not in hist: scores[rec] = scores.get(rec, 0) + sim
+                    if rec not in hist: # Pas déjà vu
+                        scores[rec] = scores.get(rec, 0) + sim
             
+            # Top 10
             best = [x[0] for x in sorted(scores.items(), key=lambda x: x[1], reverse=True)[:10]]
-            recalls.append(recall_at_10(best, truth))
-            ndcgs.append(ndcg_at_10(best, truth))
+            
+            recalls.append(recall_at_10(best, truth_set))
+            ndcgs.append(ndcg_at_10(best, truth_set))
 
         mlflow.log_metric("recall_10", np.mean(recalls) if recalls else 0)
         mlflow.log_metric("ndcg_10", np.mean(ndcgs) if ndcgs else 0)
+        
+        # Nettoyage avant sauvegarde finale
+        del train_movies_per_user, test_truth_dict, neighbors_dict
+        gc.collect()
 
-        # 6. LOGGING ARTIFACTS (PARQUET)
+        # 7. LOGGING ARTIFACTS
         os.makedirs("mlflow_artifacts", exist_ok=True)
-        # --- MODIF PARQUET ---
         item_neighbors_df.to_parquet("mlflow_artifacts/item_neighbors.parquet", index=False)
         movie_popularity.to_parquet("mlflow_artifacts/movie_popularity.parquet", index=False)
         
         mlflow.log_artifact("mlflow_artifacts/item_neighbors.parquet")
         mlflow.log_artifact("mlflow_artifacts/movie_popularity.parquet")
 
-        # 7. MODEL LOGGING
+        # 8. MODEL LOGGING
         print("[INFO] Logging PyFunc Model...")
-        model_info = mlflow.pyfunc.log_model(
+        mlflow.pyfunc.log_model(
             artifact_path="model",
             python_model=ItemCFPyFunc(n_reco=10, min_user_ratings=5),
             artifacts={
-                # --- MODIF PARQUET ---
                 "item_neighbors": "mlflow_artifacts/item_neighbors.parquet",
                 "movie_popularity": "mlflow_artifacts/movie_popularity.parquet",
             },
             registered_model_name=REGISTERED_MODEL_NAME
         )
         
-        # 8. ALIAS PRODUCTION
+        # 9. ALIAS PRODUCTION
         print("[INFO] Setting Alias 'production'...")
         client = mlflow.tracking.MlflowClient()
         latest_versions = client.get_latest_versions(REGISTERED_MODEL_NAME, stages=["None"])
         if latest_versions:
-            latest_version = latest_versions[0].version
-            client.set_registered_model_alias(REGISTERED_MODEL_NAME, "production", latest_version)
-            print(f"[SUCCESS] Model v{latest_version} aliased as 'production'")
+            client.set_registered_model_alias(REGISTERED_MODEL_NAME, "production", latest_versions[0].version)
 
-        # 9. SAVE TO SQL (Pour l'API de prod, optionnel si l'API lit MLflow direct)
-        print("[INFO] Saving to SQL for Production API...")
+        # 10. SAVE TO SQL
+        print("[INFO] Saving to SQL...")
         engine = create_engine(PG_URL)
         with engine.begin() as conn:
             conn.execute(text(f"DROP TABLE IF EXISTS {SCHEMA}.item_neighbors"))
             conn.execute(text(f"DROP TABLE IF EXISTS {SCHEMA}.movie_popularity"))
-            item_neighbors_df.to_sql("item_neighbors", conn, schema=SCHEMA, index=False, if_exists="replace", chunksize=10000)
-            movie_popularity.to_sql("movie_popularity", conn, schema=SCHEMA, index=False, if_exists="replace")
+            # method='multi' est plus rapide, chunksize réduit (1000) pour la sécurité RAM
+            item_neighbors_df.to_sql("item_neighbors", conn, schema=SCHEMA, index=False, if_exists="replace", method='multi', chunksize=1000)
+            movie_popularity.to_sql("movie_popularity", conn, schema=SCHEMA, index=False, if_exists="replace", method='multi', chunksize=1000)
             
         print("[OK] Training Full Pipeline Success.")
 

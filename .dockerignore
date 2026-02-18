@@ -1,0 +1,24 @@
+# .dockerignore
+
+# Ignore git history (can be huge)
+.git/
+
+# Ignore local virtual environments
+venv/
+.venv/
+env/
+
+# Ignore heavy data (we map this via volumes or download it)
+data/
+mlflow_artifacts/
+mlruns/
+
+# Ignore python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# Oubli de ChatGPT. Il faut tout faire à la main sérieux
+.dvc/cache/
+.dvc/tmp/

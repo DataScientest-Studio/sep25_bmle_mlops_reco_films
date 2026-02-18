@@ -1,0 +1,25 @@
+# Dockerfile.frontend
+FROM python:3.10-slim
+
+# Installation des dépendances système
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# On installe les requirements d'abord (optimisation cache)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# On copie tout le reste du projet (dont src/)
+COPY . .
+
+# On expose le port
+EXPOSE 8501
+
+# COMMANDE FIXE : On utilise le chemin relatif interne au conteneur
+CMD ["streamlit", "run", "src/streamlit/project_prez.py", "--server.port=8501", "--server.address=0.0.0.0"]

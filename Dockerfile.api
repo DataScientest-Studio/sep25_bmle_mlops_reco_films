@@ -1,0 +1,24 @@
+# Dockerfile.api
+FROM python:3.10-slim
+
+# Installation des dépendances système (libpq-dev pour Postgres, gcc pour compiler, git pour DVC)
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    gcc \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copie des requirements et installation
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copie du code source
+COPY . .
+
+# Variables d'environnement
+ENV PYTHONUNBUFFERED=1
+
+# Lancement de l'API
+CMD ["uvicorn", "main_user_api:app", "--host", "0.0.0.0", "--port", "8000"]
