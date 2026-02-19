@@ -1,10 +1,9 @@
-# ============================================================
-# TRAIN_MODEL2_OPTIMIZED.PY (MEMORY SAFE VERSION + DVC TRACKING)
-# ============================================================
+# ==========================
+# TRAIN_MODEL2_OPTIMIZED.PY
+# ==========================
 from __future__ import annotations
 
 import os
-# FIX CRITIQUE
 os.environ["SETUPTOOLS_USE_DISTUTILS"] = "stdlib"
 
 import sys
@@ -15,7 +14,7 @@ import subprocess
 from datetime import datetime
 import mlflow
 import gc
-import yaml  # <--- AJOUT SANS RISQUE : Nécessaire pour lire le fichier .dvc
+import yaml
 from sqlalchemy import create_engine, text
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import NearestNeighbors
@@ -23,8 +22,6 @@ from sklearn.model_selection import train_test_split
 import argparse
 import mlflow.pyfunc
 from collections import defaultdict
-
-# Import local sécurisé
 try:
     from src.models.mlflow_model import ItemCFPyFunc
 except ImportError:
@@ -61,10 +58,8 @@ def get_git_commit() -> str:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     except: return "unknown"
 
-# <--- AJOUT SANS RISQUE : Fonction pour lire le hash DVC sans faire planter le script
 def get_dvc_hash(dvc_path: str) -> str:
     try:
-        # On essaie d'ouvrir le fichier .dvc associé aux données
         with open(dvc_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
             # On récupère le hash MD5
@@ -72,14 +67,11 @@ def get_dvc_hash(dvc_path: str) -> str:
     except Exception:
         # Si fichier pas trouvé ou erreur, on renvoie "unknown" sans crasher
         return "unknown"
-# --------------------------------------------------------------------------------
 
 def compute_bayesian_popularity(ratings: pd.DataFrame) -> pd.DataFrame:
-    # Optimisation: float32 pour les calculs
     stats = ratings.groupby("movieId")["rating"].agg(["count", "mean"]).reset_index()
     C = stats["count"].mean()
     M = stats["mean"].mean()
-    # Calcul vectorisé
     stats["bayes_score"] = ((C * M + stats["count"] * stats["mean"]) / (C + stats["count"])).astype("float32")
     
     result = stats.rename(columns={"count": "n_ratings", "mean": "mean_rating"})
@@ -117,15 +109,12 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         mlflow.log_param("min_ratings", min_ratings)
         mlflow.set_tag("git_commit", get_git_commit())
 
-        # <--- AJOUT SANS RISQUE : Log du hash DVC
-        # On suppose que le fichier s'appelle 'data/training_set.parquet.dvc'
-        # S'il ne le trouve pas, il loggera "unknown" mais continuera l'entraînement.
         dvc_hash = get_dvc_hash("data/training_set.parquet.dvc")
         mlflow.set_tag("dvc_dataset_hash", dvc_hash)
         print(f"[INFO] DVC Hash logged: {dvc_hash}")
         # ------------------------------------------
         
-        # 1. LOAD FROM PARQUET (OPTIMISÉ)
+        # 1. LOAD FROM PARQUET
         parquet_path = "data/training_set.parquet"
         print(f"[INFO] Loading data from {parquet_path}...")
         
@@ -155,14 +144,10 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         # Split
         train, test = train_test_split(ratings, test_size=0.2, random_state=42)
         
-        # --- FIX MEMOIRE : On ne construit PAS l'historique global ici ---
-        # Ancienne ligne supprimée : train_movies_per_user = ...
-        
-        # Nettoyage immédiat
         del ratings, counts, keep_movies
         gc.collect()
 
-        # 3. SPARSE MATRIX (OPTIMISÉ VIA CATEGORICALS)
+        # 3. SPARSE MATRIX
         print("[INFO] Building Sparse Matrix...")
         
         # Utilisation de Categorical pour mapper ID -> Index
@@ -183,14 +168,13 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         
         X_iu = csr_matrix((vals, (rows, cols)), shape=(n_items, n_users), dtype=np.float32)
         
-        # Attention : On garde 'train' pour l'évaluation plus tard, mais on supprime les colonnes inutiles
+        # On garde 'train' pour l'évaluation plus tard, mais on supprime les colonnes inutiles
         train = train[["userId", "movieId"]] 
         del rows, cols, vals
         gc.collect()
 
         # 4. KNN TRAINING
         print("[INFO] Training KNN...")
-        # algorithm='brute' est souvent plus stable en mémoire pour des matrices larges
         nn = NearestNeighbors(n_neighbors=k_neighbors+1, metric="cosine", algorithm="brute", n_jobs=-1)
         nn.fit(X_iu)
 
@@ -222,14 +206,13 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         del dists, idxs, neighbor_indices, neighbor_dists, source_indices
         gc.collect()
 
-        # 6. EVALUATION (Optimisée Lazy Loading)
+        # 6. EVALUATION
         print("[INFO] Evaluating...")
         
         # Conversion DataFrame -> Dict pour accès rapide O(1)
         np_neighbors = item_neighbors_df.values 
         temp_dict = defaultdict(list)
         for row in np_neighbors:
-             # row[0] = source, row[1] = target, row[2] = sim
              temp_dict[int(row[0])].append((int(row[1]), float(row[2])))
         neighbors_dict = dict(temp_dict)
         del temp_dict, np_neighbors
@@ -238,7 +221,7 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         sample_users = test["userId"].unique()[:1000]
         recalls, ndcgs = [], []
         
-        # --- FIX MEMOIRE : Construction de l'historique UNIQUEMENT pour l'échantillon ---
+        # --- Construction de l'historique pour l'échantillon ---
         print(f"[INFO] Building partial history for {len(sample_users)} users...")
         
         # Filtre train pour ne garder que l'historique des users testés
@@ -249,7 +232,6 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         partial_test = test[test["userId"].isin(sample_users)]
         test_truth_dict = partial_test.groupby("userId")["movieId"].apply(set).to_dict()
 
-        # On peut supprimer train/test complets maintenant
         del train, test, partial_train, partial_test
         gc.collect()
 
@@ -311,7 +293,6 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         with engine.begin() as conn:
             conn.execute(text(f"DROP TABLE IF EXISTS {SCHEMA}.item_neighbors"))
             conn.execute(text(f"DROP TABLE IF EXISTS {SCHEMA}.movie_popularity"))
-            # method='multi' est plus rapide, chunksize réduit (1000) pour la sécurité RAM
             item_neighbors_df.to_sql("item_neighbors", conn, schema=SCHEMA, index=False, if_exists="replace", method='multi', chunksize=1000)
             movie_popularity.to_sql("movie_popularity", conn, schema=SCHEMA, index=False, if_exists="replace", method='multi', chunksize=1000)
             

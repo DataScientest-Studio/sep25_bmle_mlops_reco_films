@@ -33,7 +33,7 @@ def evaluate_precision_at_k(
 
     X = movie_matrix.drop("movieId", axis=1)
 
-    # Pré-calcul des voisins (clé pour éviter les temps infinis)
+    # Pré-calcul des voisins
     distances_all, indices_all = model.kneighbors(
         X,
         n_neighbors=model.n_neighbors,

@@ -174,7 +174,7 @@ def display_yearly_stats_figure(df, show=False):
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
-    # 🔑 TITRE AU-DESSUS DES TABLEAUX
+    # TITRE AU-DESSUS DES TABLEAUX
     fig.text(
         0.5, 0.98,
         "MovieLens – Statistiques annuelles",
@@ -187,10 +187,10 @@ def display_yearly_stats_figure(df, show=False):
          # position de l'axe dans la figure
         bbox = ax.get_position()
 
-        # 🔑 titre AU-DESSUS du tableau
+        # titre AU-DESSUS du tableau
         fig.text(
             bbox.x0 + bbox.width / 2,
-            bbox.y1 + 0.02,          # espace vertical
+            bbox.y1 + 0.02,      
             title,
             ha="center",
             va="bottom",
@@ -203,7 +203,7 @@ def display_yearly_stats_figure(df, show=False):
         COLUMN_LABELS.get(c, c) for c in sub.columns
         ]
 
-        # 🔑 largeur relative des colonnes
+        # largeur relative des colonnes
         # 1ère colonne (année) plus étroite
         # autres colonnes plus larges
         n_cols = len(sub.columns)
@@ -471,10 +471,8 @@ ax.set_xticklabels(labels)
 ax.set_ylabel("Nombre de nouveaux films")
 ax.set_title("Nouveaux films – mois courant vs précédent (par genre)")
 
-# --- réserver 25 % de la largeur de l’axe pour la légende
 ax.set_xlim(-0.5, len(x) - 0.5 + 0.75)
 
-# --- légende DANS l’axe, sans superposition
 handles, labels_leg = ax.get_legend_handles_labels()
 ax.legend(
     handles[::-1],
@@ -483,7 +481,7 @@ ax.legend(
     fontsize=7,
     title_fontsize=8,
     loc="center left",
-    bbox_to_anchor=(0.75, 0.5),   # début du quart droit
+    bbox_to_anchor=(0.75, 0.5),
     borderaxespad=0.0,
 )
 

@@ -14,12 +14,9 @@ class ItemCFPyFunc(mlflow.pyfunc.PythonModel):
 
     def load_context(self, context):
         # --- MODIFICATION PARQUET ---
-        # Pandas détecte automatiquement le format Parquet
         print(f"[MODEL LOAD] Loading artifacts from: {context.artifacts}")
         item_neighbors = pd.read_parquet(context.artifacts["item_neighbors"])
         movie_popularity = pd.read_parquet(context.artifacts["movie_popularity"])
-
-        # Le reste de la logique reste identique (itération sur le DataFrame chargé)
         neighbors_dict = {}
         # itertuples fonctionne pareil sur un DF chargé depuis Parquet
         for row in item_neighbors.itertuples(index=False):

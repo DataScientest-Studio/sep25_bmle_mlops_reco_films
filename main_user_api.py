@@ -36,7 +36,6 @@ logger = logging.getLogger(__name__)
 
 PG_URL = os.getenv("PG_URL", "postgresql+psycopg2://movie:movie@postgres:5432/movie_reco")
 
-# --- ENGINE SINGLETON ---
 _engine = create_engine(PG_URL, pool_size=5, max_overflow=10)
 
 def get_engine():
@@ -59,8 +58,6 @@ def load_titles_from_sql():
 
 TITLE_MAP = load_titles_from_sql()
 
-
-# --- LIFESPAN : warm-up du modèle au démarrage ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("🚀 Chargement du modèle en mémoire...")
@@ -162,7 +159,7 @@ def get_movie_details(movie_id: int):
             row = conn.execute(query, {"mid": movie_id}).mappings().one_or_none()
             if not row:
                 raise HTTPException(status_code=404, detail="Film introuvable.")
-            result = dict(row)  # ✅ converti pendant que la connexion est ouverte
+            result = dict(row) 
 
         return {
             "movie_id": result["movieId"],

@@ -22,8 +22,6 @@ log "🚀 Démarrage du Pipeline MLOps..."
 log "🔄 0. Git Pull..."
 if git pull origin "$GIT_BRANCH"; then
     log "✅ Code à jour."
-    # On tente un DVC pull pour avoir le cache, mais ce n'est pas critique
-    # car l'ingestion va écraser les données raw de toute façon.
     dvc pull >> "$LOG_FILE" 2>&1 || true 
 else
     log "❌ Erreur Git Pull. Arrêt."
@@ -34,7 +32,6 @@ fi
 # 1. INGESTION (Source -> Local)
 # ==============================================================================
 log "📡 1. Ingestion (Téléchargement + SQL)..."
-
 # On lance l'ingestion qui va TELECHARGER les fichiers
 if python -m src.ingestion.ingestion_movielens >> "$LOG_FILE" 2>&1; then
     

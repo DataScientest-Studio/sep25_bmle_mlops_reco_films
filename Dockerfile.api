@@ -1,7 +1,7 @@
 # Dockerfile.api
 FROM python:3.10-slim
 
-# Installation des dépendances système (libpq-dev pour Postgres, gcc pour compiler, git pour DVC)
+# Installation des dépendances système
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     gcc \

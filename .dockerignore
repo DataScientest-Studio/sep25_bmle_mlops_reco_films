@@ -19,6 +19,6 @@ __pycache__/
 .pytest_cache/
 .coverage
 
-# Oubli de ChatGPT. Il faut tout faire à la main sérieux
+# Ignore dvc cache
 .dvc/cache/
 .dvc/tmp/

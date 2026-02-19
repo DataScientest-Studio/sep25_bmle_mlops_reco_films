@@ -5,7 +5,6 @@ from sqlalchemy import create_engine, text
 PG_URL = os.getenv("PG_URL", "postgresql+psycopg2://movie:movie@127.0.0.1:5432/movie_reco")
 
 def init_database():
-    # AUTOCOMMIT est vital ici pour forcer la création du schéma immédiatement
     engine = create_engine(PG_URL, isolation_level="AUTOCOMMIT")
     
     with engine.connect() as conn:

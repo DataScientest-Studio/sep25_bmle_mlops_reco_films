@@ -1,32 +1,17 @@
-# project_prez.py
-# ============================================================
-# Système de recommandation de films — Streamlit (Soutenance + Demo)
-# ============================================================
-
 from __future__ import annotations
 import os
 from pathlib import Path
 import time
-import requests  # Nécessaire pour l'API
+import requests
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
-# =========================
-# Paths
-# =========================
-# NOTE : On adapte le ROOT pour qu'il soit robuste peu importe où on lance le script
-# Si lancé depuis la racine (cas Docker), on ajuste.
 try:
-    # On tente de garder votre logique actuelle
     ROOT = Path(__file__).resolve().parents[2]
 except IndexError:
-    # Fallback si la structure de dossier est différente dans Docker
     ROOT = Path(__file__).resolve().parent
 
-# =========================
-# Figures Visualization (PNG)
-# =========================
 MOVIELENS_IMG = ROOT / "src" / "streamlit" / "movielens.png"
 DATA_IMG = ROOT / "src" / "streamlit" / "pipeline_data_IMG.png"
 viz1_IMG = ROOT / "Reports" / "figures" / "visualize_Figure_1.png"
@@ -41,9 +26,6 @@ DEFAULT_FIG_DIRS = [
     ROOT / "Assets",
 ]
 
-# =========================
-# Config & constants (MODIFIÉ POUR DOCKER)
-# =========================
 st.set_page_config(
     page_title="Système de recommandation de films (Soutenance)",
     page_icon="🎬",
@@ -52,22 +34,11 @@ st.set_page_config(
 
 APP_TITLE = "🎬 Création d'un système de recommandation de films"
 
-# --- MODIFICATIONS ICI ---
-# L'API URL est utilisée par le container Python (backend-to-backend)
-# Par défaut localhost pour dev local, mais surchargé par Docker
 API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
-# MLFlow URL interne (pour les check health requests python)
 MLFLOW_INTERNAL_URL = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 
-# MLFlow URL externe (pour le lien cliquable par l'utilisateur dans son navigateur)
-# L'utilisateur ne peut pas accéder au réseau docker interne, il passe par localhost
 MLFLOW_EXTERNAL_URL = "http://127.0.0.1:5000" 
-# -------------------------
-
-# =========================
-# UI Helpers
-# =========================
 
 def slide_header(title: str, subtitle: str | None = None) -> None:
     st.markdown(f"## {title}")
@@ -112,9 +83,6 @@ def check_api_health():
         return False
     return False
 
-# =========================
-# PARTIE 1 : PRÉSENTATION
-# =========================
 def show_presentation_mode():
     
     png_map = list_pngs_in_known_dirs()
@@ -209,9 +177,6 @@ def show_presentation_mode():
             "Item-based CF + évaluation orientée ranking (Top-10)"
         )
 
-        # ==========================================================
-        # MODÈLE
-        # ==========================================================
         st.subheader("🎯 Modèle : Item-Based Collaborative Filtering (ItemCF)")
 
         col1, col2 = st.columns(2)
@@ -242,9 +207,6 @@ def show_presentation_mode():
 
         st.markdown("---")
 
-        # ==========================================================
-        # COLD START
-        # ==========================================================
         st.subheader("🧊 Gestion du Cold-Start")
 
         col1, col2 = st.columns(2)
@@ -268,9 +230,6 @@ def show_presentation_mode():
 
         st.markdown("---")
 
-        # ==========================================================
-        # MÉTRIQUES
-        # ==========================================================
         st.subheader("📊 Métriques d’évaluation (Top-10 Ranking Metrics)")
 
         st.markdown("""
@@ -347,9 +306,6 @@ def show_presentation_mode():
             "Traçabilité, reproductibilité, gouvernance modèle (Registry + alias production)"
         )
 
-        # ==========================================================
-        # Logo + Intro
-        # ==========================================================
         col_logo, col_txt = st.columns([1, 3])
         with col_logo:
             show_png_if_exists("MLflow-logo", png_map, caption=None)
@@ -364,9 +320,6 @@ def show_presentation_mode():
 
         st.markdown("---")
 
-        # ==========================================================
-        # Objectifs
-        # ==========================================================
         st.subheader("🎯 Objectifs MLOps couverts")
 
         col1, col2 = st.columns(2)
@@ -389,9 +342,6 @@ def show_presentation_mode():
 
         st.markdown("---")
 
-        # ==========================================================
-        # Screenshot runs (liste)
-        # ==========================================================
         st.subheader("🧪 Tracking des runs (params + métriques + artefacts)")
         displayed = show_png_if_exists(
             "mlflow_runs_metriques",
@@ -403,9 +353,6 @@ def show_presentation_mode():
 
         st.markdown("---")
 
-        # ==========================================================
-        # Comparaison runs (visualization)
-        # ==========================================================
         st.subheader("📈 Comparaison d’expériences (visualisations MLflow)")
         displayed = show_png_if_exists(
             "mlflow_run_comparaison",
@@ -417,9 +364,6 @@ def show_presentation_mode():
 
         st.markdown("---")
 
-        # ==========================================================
-        # Run detail (preuve de traçabilité)
-        # ==========================================================
         st.subheader("🔍 Détail d’un run : métriques, paramètres, tags")
         displayed = show_png_if_exists(
             "mlflow_run_k10v8",
@@ -438,9 +382,6 @@ def show_presentation_mode():
 
         st.markdown("---")
 
-        # ==========================================================
-        # Registry + alias production
-        # ==========================================================
         st.subheader("🏷️ Model Registry & Alias `@production` (contrat de déploiement)")
         col1, col2 = st.columns(2)
         with col1:
@@ -469,9 +410,6 @@ def show_presentation_mode():
 
         st.markdown("---")
 
-        # ==========================================================
-        # Promotion automatique (nouvelle règle)
-        # ==========================================================
         st.subheader("🚀 Promotion automatique : score pondéré (gouvernance modèle)")
 
         st.markdown("""
@@ -790,13 +728,9 @@ def show_presentation_mode():
 
         st.warning("🚀 Le projet passe ainsi d'un pipeline fonctionnel en phase de test à une base solide pour un système de recommandation industrialisable.")
 
-# =========================
-# PARTIE 2 : DÉMONSTRATION (Live App)
-# =========================
 def show_demo_mode():
     st.markdown("## 🍿 Démonstration Live")
     
-    # Vérification Healthcheck
     api_is_alive = check_api_health()
     if api_is_alive:
         st.sidebar.success(f"🟢 API Connectée")
@@ -805,7 +739,6 @@ def show_demo_mode():
         st.error(f"Impossible de contacter l'API sur : {API_URL}")
         return
 
-    # Tabs pour différentes fonctionnalités de démo
     tab1, tab2, tab3, tab4 = st.tabs([
         "👤 Recommandation Utilisateur", 
         "🔥 Films Populaires", 
@@ -813,7 +746,6 @@ def show_demo_mode():
         "🖥️ Statut Système"
     ])
 
-    # --- TAB 1: RECO USER ---
     with tab1:
         st.subheader("Simuler un utilisateur")
         
@@ -863,7 +795,6 @@ def show_demo_mode():
                 except Exception as e:
                     st.error(f"Erreur de connexion : {str(e)}")
 
-    # --- TAB 2: POPULAR ---
     with tab2:
         st.subheader("Scénario Cold Start")
         if st.button("Charger les populaires"):
@@ -883,17 +814,13 @@ def show_demo_mode():
             except Exception as e:
                 st.error(e)
 
-    # --- TAB 3: INFO MODEL ---
     with tab3:
         st.subheader("📦 Observabilité du Modèle")
         c_refresh, c_link = st.columns([1, 4])
         with c_refresh:
             btn_refresh = st.button("🔄 Rafraîchir Métadonnées")
         with c_link:
-             # Utilisation du lien EXTERNE pour le navigateur de l'utilisateur
              st.link_button("🚀 Ouvrir MLFlow UI", MLFLOW_EXTERNAL_URL)
-
-# Remplace le bloc "if btn_refresh:" dans tab3 par ceci :
 
         if btn_refresh:
             try:
@@ -917,7 +844,6 @@ def show_demo_mode():
                 else:
                     st.warning("Configuration non disponible.")
 
-                # ✅ NOUVEAU BLOC : Métriques
                 st.divider()
                 st.markdown("#### 📊 Métriques du Modèle")
                 metrics = meta_data.get("metrics", {})
@@ -928,7 +854,6 @@ def show_demo_mode():
                 else:
                     st.info("Aucune métrique enregistrée pour ce run.")
 
-                # ✅ NOUVEAU BLOC : Tags / Dataset Hash
                 st.divider()
                 st.markdown("#### 🏷️ Tags & Traçabilité Dataset")
                 tags = meta_data.get("tags", {})
@@ -963,15 +888,12 @@ def show_demo_mode():
                 status_train.update(label="Erreur connexion", state="error")
                 st.error(str(e))
 
-    # --- TAB 4: SYSTEM STATUS ---
     with tab4:
         st.subheader("🖥️ Santé du Système")
         
-        # Section Diagnostics
         if st.button("Lancer les Diagnostics", type="primary"):
             status_container = st.status("Analyse des composants...", expanded=True)
             
-            # 1. API Latency
             t0 = time.time()
             try:
                 requests.get(f"{API_URL}/health", timeout=2)
@@ -981,14 +903,12 @@ def show_demo_mode():
                 latency = 0
                 api_ok = False
             
-            # 2. MLFlow (Internal Check)
             try:
                 mf_res = requests.get(MLFLOW_INTERNAL_URL, timeout=1)
                 mlflow_ok = (mf_res.status_code == 200)
             except:
                 mlflow_ok = False
             
-            # 3. Deep Check
             try:
                 ready_res = requests.get(f"{API_URL}/ready", timeout=5)
                 checks = ready_res.json().get("checks", {})
@@ -1006,11 +926,9 @@ def show_demo_mode():
             col3.metric("MLFlow Server", "Accessible" if mlflow_ok else "Inaccessible")
             col4.metric("Modèle IA", "Chargé" if model_status == "ready" else "Erreur")
             
-        # --- MODIFICATION ICI : SECTION SORTIE DU IF ---
         st.divider()
         st.markdown("#### 🛠️ Actions Rapides")
         
-        # Le bouton est maintenant au premier niveau, pas besoin de cliquer sur diagnostics avant
         if st.button("Relancer Ingestion Données"):
                 try:
                     with st.spinner("Pipeline ingestion en cours..."):
@@ -1020,9 +938,6 @@ def show_demo_mode():
                 except:
                     st.error("Échec appel API")
 
-# =========================
-# MAIN
-# =========================
 st.title(APP_TITLE)
 mode = st.sidebar.selectbox("Choisir le mode :", ["Présentation (Slides)", "Application Démo"])
 if mode == "Présentation (Slides)":

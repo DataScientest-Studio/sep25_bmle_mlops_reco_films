@@ -28,6 +28,36 @@ Ce repository contient une plateforme de recommandation orientee production avec
 
 ---
 
+## Apercu visuel de la presentation Streamlit
+
+### 1) Architecture globale
+
+![Architecture MLOps](reports/figures/Architecture.png)
+
+### 2) Schema de base de donnees
+
+![Schema SQL](src/streamlit/SQL1.png)
+
+### 3) Tracking des experiences MLflow
+
+![MLflow runs et metriques](reports/figures/mlflow_runs_metriques.png)
+
+![Comparaison de runs](reports/figures/mlflow_run_comparaison.png)
+
+![Registry et alias production](reports/figures/mlflow_registry_alias.png)
+
+### 4) Monitoring et maintenance (slides Grafana)
+
+![Pipeline health](src/streamlit/grafana_pipelineHealth.PNG)
+
+![Data quality](src/streamlit/grafana_dataQuality.PNG)
+
+![Data drift](src/streamlit/grafana_dataDrift.PNG)
+
+![KPI mensuels](src/streamlit/grafana_KPImensuels.PNG)
+
+---
+
 ## Architecture
 
 ### Services Docker
@@ -163,7 +193,7 @@ docker compose up --build
 |-- daily_pipeline.sh
 |-- data/
 |-- mlartifacts/
-|-- reports/figures/
+|-- reports/
 `-- src/
     |-- ingestion/
     |-- models/
@@ -194,14 +224,6 @@ uvicorn main_user_api:app --host 0.0.0.0 --port 8000
 # 6) Frontend
 streamlit run src/streamlit/project_prez.py
 ```
-
----
-
-## Notes
-
-- `daily_pipeline.sh` orchestre Git + DVC + ingestion + training + promotion.
-- Les artefacts MLflow sont persistants dans `./mlartifacts`.
-- Le serving online evite la reinference lourde en temps reel grace a des artefacts precalcules.
 
 ---
 

@@ -126,7 +126,6 @@ def get_production_model_metadata():
             "run_id": mv.run_id,
             "creation_timestamp": pd.to_datetime(mv.creation_timestamp, unit="ms").isoformat(),
             "git_commit": run.data.tags.get("git_commit", "unknown"),
-            # ✅ AJOUT
             "dvc_dataset_hash": run.data.tags.get("dvc_dataset_hash", "unknown"),
             "tags": dict(run.data.tags),
             "metrics": {

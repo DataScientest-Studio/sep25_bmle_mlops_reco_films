@@ -20,10 +20,8 @@ def create_snapshot():
         chunks = []
         total_rows = 0
         
-        # ✅ SOLUTION : On lit par paquets de 500,000 lignes
-        # Cela garde l'empreinte mémoire très basse
+        # On lit par paquets de 500,000 lignes
         for chunk in pd.read_sql(query, engine, chunksize=500000):
-            
             # Optimisation immédiate des types AVANT d'accumuler en mémoire
             chunk["userId"] = chunk["userId"].astype("int32")
             chunk["movieId"] = chunk["movieId"].astype("int32")

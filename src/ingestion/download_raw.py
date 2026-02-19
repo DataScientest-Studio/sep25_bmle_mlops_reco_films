@@ -8,7 +8,6 @@ def download_from_dagshub():
     Cible spécifiquement le fichier data/raw.dvc.
     """
     # On se place à la racine du projet pour que les chemins DVC soient corrects
-    # (Optionnel si tu lances déjà le script depuis la racine)
     
     print("🔍 Vérification du pointeur DVC...")
     if not os.path.exists("data/raw.dvc"):
@@ -19,7 +18,6 @@ def download_from_dagshub():
     try:
         print("📡 Lancement du pull DVC (Synchronisation avec DagsHub)...")
         # On utilise subprocess pour appeler DVC
-        # On cible uniquement le dossier raw pour gagner du temps
         result = subprocess.run(
             ["dvc", "pull", "data/raw.dvc"],
             check=True,
