@@ -1,5 +1,5 @@
 # ============================================================
-# TRAIN_MODEL2_OPTIMIZED.PY (MEMORY SAFE VERSION)
+# TRAIN_MODEL2_OPTIMIZED.PY (MEMORY SAFE VERSION + DVC TRACKING)
 # ============================================================
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import subprocess
 from datetime import datetime
 import mlflow
 import gc
+import yaml  # <--- AJOUT SANS RISQUE : Nécessaire pour lire le fichier .dvc
 from sqlalchemy import create_engine, text
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import NearestNeighbors
@@ -60,6 +61,19 @@ def get_git_commit() -> str:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     except: return "unknown"
 
+# <--- AJOUT SANS RISQUE : Fonction pour lire le hash DVC sans faire planter le script
+def get_dvc_hash(dvc_path: str) -> str:
+    try:
+        # On essaie d'ouvrir le fichier .dvc associé aux données
+        with open(dvc_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+            # On récupère le hash MD5
+            return str(data["outs"][0].get("md5", "unknown"))
+    except Exception:
+        # Si fichier pas trouvé ou erreur, on renvoie "unknown" sans crasher
+        return "unknown"
+# --------------------------------------------------------------------------------
+
 def compute_bayesian_popularity(ratings: pd.DataFrame) -> pd.DataFrame:
     # Optimisation: float32 pour les calculs
     stats = ratings.groupby("movieId")["rating"].agg(["count", "mean"]).reset_index()
@@ -102,6 +116,14 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         mlflow.log_param("k_neighbors", k_neighbors)
         mlflow.log_param("min_ratings", min_ratings)
         mlflow.set_tag("git_commit", get_git_commit())
+
+        # <--- AJOUT SANS RISQUE : Log du hash DVC
+        # On suppose que le fichier s'appelle 'data/training_set.parquet.dvc'
+        # S'il ne le trouve pas, il loggera "unknown" mais continuera l'entraînement.
+        dvc_hash = get_dvc_hash("data/training_set.parquet.dvc")
+        mlflow.set_tag("dvc_dataset_hash", dvc_hash)
+        print(f"[INFO] DVC Hash logged: {dvc_hash}")
+        # ------------------------------------------
         
         # 1. LOAD FROM PARQUET (OPTIMISÉ)
         parquet_path = "data/training_set.parquet"

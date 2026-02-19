@@ -140,7 +140,7 @@ def get_popular_movies(limit: int = 10):
             results.append({
                 "movie_id": mid,
                 "title": TITLE_MAP.get(mid, f"Unknown ({mid})"),
-                "stats": {"score": round(row["bayes_score"], 3), "mean_rating": round(row["mean_rating"], 2), "count": int(row["n_ratings"])}
+                "stats": {"score": round(float(result["bayes_score"] or 0), 3), "mean_rating": round(float(result["mean_rating"] or 0), 2), "count": int(result["n_ratings"] or 0)}
             })
         return results
     except Exception as e:
@@ -152,17 +152,27 @@ def get_popular_movies(limit: int = 10):
 def get_movie_details(movie_id: int):
     try:
         query = text(
-            'SELECT m."movieId", m.title, m.genres, p.mean_rating, p.n_ratings, p.bayes_score '
-            'FROM raw.raw_movies m LEFT JOIN raw.movie_popularity p ON m."movieId" = p."movieId" '
-            'WHERE m."movieId" = :mid'
-        )
+            'SELECT DISTINCT ON (m."movieId") m."movieId", m.title, m.genres, '
+            'p.mean_rating, p.n_ratings, p.bayes_score '
+            'FROM raw.raw_movies m '
+            'LEFT JOIN raw.movie_popularity p ON m."movieId" = p."movieId" '
+            'WHERE m."movieId" = :mid '
+            'ORDER BY m."movieId", p.bayes_score DESC NULLS LAST')
         with get_engine().connect() as conn:
-            result = conn.execute(query, {"mid": movie_id}).mappings().one_or_none()
-        if not result:
-            raise HTTPException(status_code=404, detail="Film introuvable.")
+            row = conn.execute(query, {"mid": movie_id}).mappings().one_or_none()
+            if not row:
+                raise HTTPException(status_code=404, detail="Film introuvable.")
+            result = dict(row)  # ✅ converti pendant que la connexion est ouverte
+
         return {
-            "movie_id": result["movieId"], "title": result["title"], "genres": result["genres"],
-            "stats": {"score": round(result["bayes_score"] or 0, 3), "mean_rating": round(result["mean_rating"] or 0, 2), "count": int(result["n_ratings"] or 0)}
+            "movie_id": result["movieId"],
+            "title": result["title"],
+            "genres": result["genres"],
+            "stats": {
+                "score": round(float(result["bayes_score"] or 0), 3),
+                "mean_rating": round(float(result["mean_rating"] or 0), 2),
+                "count": int(result["n_ratings"] or 0)
+            }
         }
     except HTTPException:
         raise

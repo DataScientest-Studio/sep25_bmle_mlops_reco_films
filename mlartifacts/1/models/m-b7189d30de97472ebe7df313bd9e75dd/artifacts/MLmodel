@@ -1,0 +1,26 @@
+artifact_path: /mlartifacts/1/models/m-b7189d30de97472ebe7df313bd9e75dd/artifacts
+flavors:
+  python_function:
+    artifacts:
+      item_neighbors:
+        path: artifacts/item_neighbors.parquet
+        uri: mlflow_artifacts/item_neighbors.parquet
+      movie_popularity:
+        path: artifacts/movie_popularity.parquet
+        uri: mlflow_artifacts/movie_popularity.parquet
+    cloudpickle_version: 3.1.2
+    code: null
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pyfunc.model
+    python_model: python_model.pkl
+    python_version: 3.10.19
+    streamable: false
+mlflow_version: 3.9.0
+model_id: m-b7189d30de97472ebe7df313bd9e75dd
+model_size_bytes: 2036267
+model_uuid: m-b7189d30de97472ebe7df313bd9e75dd
+prompts: null
+run_id: 2b3b9dc6b10e4ac4b0161656f37de959
+utc_time_created: '2026-02-19 07:58:34.968909'
