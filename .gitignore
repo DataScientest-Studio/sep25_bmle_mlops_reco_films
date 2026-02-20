@@ -121,3 +121,6 @@ data/db/mlflow.sqlite
 mlruns/
 reports/run_info.json
 mlflow_artifacts/
+
+# MLflow server artifacts (Docker volume)
+mlartifacts/

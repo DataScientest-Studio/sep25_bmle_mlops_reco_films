@@ -14,7 +14,7 @@ import subprocess
 from datetime import datetime
 import mlflow
 import gc
-import yaml
+import yaml  # Nécessaire pour lire le fichier .dvc
 from sqlalchemy import create_engine, text
 from scipy.sparse import csr_matrix
 from sklearn.neighbors import NearestNeighbors
@@ -58,6 +58,7 @@ def get_git_commit() -> str:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     except: return "unknown"
 
+# Fonction pour lire le hash DVC sans faire planter le script
 def get_dvc_hash(dvc_path: str) -> str:
     try:
         with open(dvc_path, "r", encoding="utf-8") as f:
@@ -84,6 +85,11 @@ def recall_at_10(recos, truth_set):
     if not truth_set: return 0.0
     return len(set(recos[:10]) & truth_set) / len(truth_set)
 
+def precision_at_10(recos, truth_set):
+    if not recos:
+        return 0.0
+    return len(set(recos[:10]) & truth_set) / 10
+
 def ndcg_at_10(recos, truth_set):
     if not truth_set: return 0.0
     dcg = 0.0
@@ -109,6 +115,10 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         mlflow.log_param("min_ratings", min_ratings)
         mlflow.set_tag("git_commit", get_git_commit())
 
+
+        # On suppose que le fichier s'appelle 'data/training_set.parquet.dvc'
+        # S'il ne le trouve pas, il loggera "unknown" mais continuera l'entraînement.
+        
         dvc_hash = get_dvc_hash("data/training_set.parquet.dvc")
         mlflow.set_tag("dvc_dataset_hash", dvc_hash)
         print(f"[INFO] DVC Hash logged: {dvc_hash}")
@@ -144,6 +154,9 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         # Split
         train, test = train_test_split(ratings, test_size=0.2, random_state=42)
         
+        # --- FIX MEMOIRE : On ne construit PAS l'historique global ici ---
+        
+        # Nettoyage immédiat
         del ratings, counts, keep_movies
         gc.collect()
 
@@ -219,7 +232,7 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         
         # Sélection d'un échantillon
         sample_users = test["userId"].unique()[:1000]
-        recalls, ndcgs = [], []
+        recalls, ndcgs, precisions = [], [], []
         
         # --- Construction de l'historique pour l'échantillon ---
         print(f"[INFO] Building partial history for {len(sample_users)} users...")
@@ -252,9 +265,11 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
             
             recalls.append(recall_at_10(best, truth_set))
             ndcgs.append(ndcg_at_10(best, truth_set))
+            precisions.append(precision_at_10(best, truth_set))
 
         mlflow.log_metric("recall_10", np.mean(recalls) if recalls else 0)
         mlflow.log_metric("ndcg_10", np.mean(ndcgs) if ndcgs else 0)
+        mlflow.log_metric("precision_10", np.mean(precisions) if precisions else 0)
         
         # Nettoyage avant sauvegarde finale
         del train_movies_per_user, test_truth_dict, neighbors_dict
@@ -279,15 +294,8 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
             },
             registered_model_name=REGISTERED_MODEL_NAME
         )
-        
-        # 9. ALIAS PRODUCTION
-        print("[INFO] Setting Alias 'production'...")
-        client = mlflow.tracking.MlflowClient()
-        latest_versions = client.get_latest_versions(REGISTERED_MODEL_NAME, stages=["None"])
-        if latest_versions:
-            client.set_registered_model_alias(REGISTERED_MODEL_NAME, "production", latest_versions[0].version)
-
-        # 10. SAVE TO SQL
+    
+        # 9. SAVE TO SQL
         print("[INFO] Saving to SQL...")
         engine = create_engine(PG_URL)
         with engine.begin() as conn:
