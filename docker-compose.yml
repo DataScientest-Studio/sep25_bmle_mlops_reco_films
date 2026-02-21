@@ -118,9 +118,31 @@ services:
       - ./Reports:/app/Reports
     networks:
       - reco-net
+  # ------------------------------------------------------------
+  # 6. Grafana - Monitoring
+  # ------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - reco-net
+
 networks:
   reco-net:
 volumes:
   pgdata:
   mlflow_db_data:
   mlflow_artifacts:
+  grafana_data:

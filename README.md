@@ -7,12 +7,13 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-Frontend-FF4B4B?logo=streamlit&logoColor=white)](#)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1?logo=postgresql&logoColor=white)](#)
 [![MLflow](https://img.shields.io/badge/MLflow-Tracking-0194E2?logo=mlflow&logoColor=white)](#)
+[![Grafana](https://img.shields.io/badge/Grafana-Monitoring-F46800?logo=grafana&logoColor=white)](#)
 [![DVC](https://img.shields.io/badge/DVC-Data%20Versioning-13ADC7?logo=dvc&logoColor=white)](#)
 [![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](#)
 
 </div>
 
-> Systeme de recommandation de films industrialise MLOps: ingestion MovieLens 20M, entrainement item-based CF, tracking MLflow, versioning DVC, serving FastAPI, interface Streamlit.
+> Systeme de recommandation de films industrialise MLOps : ingestion MovieLens 20M, entrainement item-based CF, tracking MLflow, versioning DVC, serving FastAPI, interface Streamlit + monitoring data, model et pipeline quotidien (observabilité ingestion des données + training)
 
 ---
 
@@ -23,7 +24,12 @@ Ce repository contient une plateforme de recommandation orientee production avec
 - Dataset: MovieLens 20M (ratings, movies, tags, etc.)
 - Modele: Item-Based Collaborative Filtering (`kNN cosine` sur matrice sparse)
 - Serving: API FastAPI + frontend Streamlit
-- MLOps: MLflow (experiences + registry), DVC (versioning data), instrumentation Prometheus pour le monitoring API
+- MLOps: 
+    - MLflow (experiences + registry), 
+    - DVC (versioning data), 
+    - instrumentation Prometheus pour le monitoring API
+    - monitoring Grafana data (volumétrie, KPI, drift) 
+    - monitoring Grafana pipeline (statut, erreurs, temps d'exécution)
 - Objectif metier cle: gerer le cold-start avec fallback de popularite bayesienne
 
 ---
@@ -39,6 +45,7 @@ Ce repository contient une plateforme de recommandation orientee production avec
 | `mlflow` | Tracking server + model registry | `5000` |
 | `api` | FastAPI (recommandation, pipeline triggers, observabilite) | `8000` |
 | `frontend` | App Streamlit (slides + demo live) | `8501` |
+| `grafana` | Monitoring runs ingestion + training, drift et KPIs | `3000` |
 
 ### Flux end-to-end
 
@@ -86,6 +93,12 @@ flowchart LR
 - Recommandations personnalisees via `/recommend`
 - Endpoints fallback/diagnostic (`/movies/popular`, `/ready`, `/model/*`)
 
+### 4) Pipeline data monitoring
+Calcul des indicateurs alimentant le monitoring data
+- Qualité des données (`src/monitoring/quality_checks.py`)
+- Data drift + KPI métiers (`src/monitoring/data_monitoring.py`)
+
+
 ---
 
 ## Strategie cold-start
@@ -107,6 +120,7 @@ Cette strategie garde des recommandations robustes meme avec peu ou pas d'histor
 - Checks de qualite SQL (`src/ingestion/check_db.py`)
 - Reproductibilite via scripts pipeline
 - Observabilite API via `prometheus-fastapi-instrumentator`
+- Dashboards Grafana initialisés en phase test
 - Documentation/demo Streamlit pour la communication projet
 
 ---
@@ -115,8 +129,10 @@ Cette strategie garde des recommandations robustes meme avec peu ou pas d'histor
 
 ### Prerequis
 
-- Docker + Docker Compose
-- Optionnel hors Docker: Python 3.10
+- Docker Desktop démarré
+- WSL2 activé (Windows)
+- Git installé
+
 
 ### Lancer la stack
 
@@ -124,12 +140,25 @@ Cette strategie garde des recommandations robustes meme avec peu ou pas d'histor
 docker compose up --build
 ```
 
+### Restaurer le snapshot des métriques monitoring
+Evite un recalcul historique long, remplit raw.monitoring_metrics
+Restaurer le dump :
+    docker exec -i movie_reco_postgres \
+    psql -U movie -d movie_reco < database/monitoring_metrics.sql
+
+Alternative : reconstruction complète
+Si l’on souhaite recalculer l’historique depuis les données brutes :
+    python src/monitoring/backfill_monitoring.py
+⚠️ Opération plus longue (gros volumes).
+
+
 ### Points d'acces
 
 - Frontend Streamlit: `http://localhost:8501`
 - FastAPI: `http://localhost:8000`
 - Docs API: `http://localhost:8000/docs`
 - MLflow UI: `http://localhost:5000`
+- Grafana: `http://localhost:3000`
 
 ---
 
@@ -162,7 +191,12 @@ docker compose up --build
 
 ```text
 .
+|-- database/
+    |-- monitoring_metrics.sql
 |-- docker-compose.yml
+|-- grafana/
+    |-- dashboards/
+    |-- provisioning/
 |-- main_user_api.py
 |-- daily_pipeline.sh
 |-- data/
@@ -171,6 +205,8 @@ docker compose up --build
 `-- src/
     |-- ingestion/
     |-- models/
+    |-- monitoring/
+        |-- backfill_monitoring.py
     |-- streamlit/
     `-- visualization/
 ```
@@ -181,13 +217,16 @@ docker compose up --build
 
 ```bash
 # 1) Ingestion
-python -m src.ingestion.ingestion_movielens
+python -m src.monitoring.run_ingestion_with_monitoring
+
+# 1bis) Calcul des indicateurs de monitoring data
+python -m src.monitoring.run_data_monitoring_pipeline 
 
 # 2) Snapshot
 python src/ingestion/create_snapshot.py
 
 # 3) Training
-python -m src.models.train_model2 --n-neighbors 20 --min-ratings 50
+python -m src.monitoring.run_training_with_monitoring
 
 # 4) Promotion
 python -m src.models.promote_best_model
@@ -206,6 +245,10 @@ streamlit run src/streamlit/project_prez.py
 - `daily_pipeline.sh` orchestre Git + DVC + ingestion + training + promotion.
 - Les artefacts MLflow sont persistants dans `./mlartifacts`.
 - Le serving online evite la reinference lourde en temps reel grace a des artefacts precalcules.
+
+- `daily_pipeline_with_monitoring.sh` orchestre Git + DVC + ingestion + training + promotion + calcul des indicateurs de monitoring
+- Temps de calcul et statuts erreur Ingestion + training
+- Data drift + KPI métiers
 
 ---
 
