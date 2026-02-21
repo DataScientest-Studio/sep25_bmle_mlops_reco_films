@@ -5,7 +5,6 @@ import time
 import requests
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
 
 try:
     ROOT = Path(__file__).resolve().parents[2]

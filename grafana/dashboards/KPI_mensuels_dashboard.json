@@ -1,0 +1,731 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Initialisation d'un suivi mensuel des notes, (nouveaux) noteurs et films notés sur les 3 dernières années",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "movie-reco-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "timezone": [
+          ""
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.3",
+      "targets": [
+        {
+          "dataset": "movie_reco",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dfdjk9i3en4e8d"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH last_3_years AS (\r\n  SELECT DISTINCT split_part(period_value, '-', 1) AS year\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly' and metric_value>0\r\n  ORDER BY year DESC\r\n  LIMIT 3\r\n)\r\n\r\nSELECT\r\n  make_date(2000, split_part(m.period_value, '-', 2)::int, 1) AS time,\r\n  m.metric_value,\r\n  split_part(m.period_value, '-', 1) AS metric\r\nFROM raw.monitoring_metrics m\r\nJOIN last_3_years y\r\n  ON split_part(m.period_value, '-', 1) = y.year\r\nWHERE m.period_type = 'monthly'\r\n  AND m.metric_name = 'nb_notes'\r\n  AND m.metric_value > 0\r\nORDER BY time;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Nb notes mensuelles par année",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "movie-reco-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "barRadius": 0.2,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.3",
+      "targets": [
+        {
+          "dataset": "movie_reco",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last_3_years AS (\r\n  SELECT DISTINCT split_part(period_value, '-', 1) AS year\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly' and metric_value>0\r\n  ORDER BY year DESC\r\n  LIMIT 3\r\n),\r\nbase AS (\r\n  SELECT\r\n    to_char(to_date(period_value || '-01','YYYY-MM-DD'),'Mon') AS month,\r\n    split_part(period_value, '-', 1) AS year,\r\n    metric_value\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly'\r\n    AND metric_name = 'avg_rating'\r\n    AND metric_value > 0\r\n)\r\nSELECT\r\n  month,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 0 LIMIT 1) THEN metric_value END) AS y0,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 1 LIMIT 1) THEN metric_value END) AS y_1,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 2 LIMIT 1) THEN metric_value END) AS y_2\r\nFROM base\r\nGROUP BY month\r\nORDER BY MIN(to_date('2000-'||month||'-01','YYYY-Mon-DD'));",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Notes moyennes mensuelles par année",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "movie-reco-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "timezone": [
+          ""
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.3",
+      "targets": [
+        {
+          "dataset": "movie_reco",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dfdjk9i3en4e8d"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH last_3_years AS (\r\n  SELECT DISTINCT split_part(period_value, '-', 1) AS year\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly' and metric_value>0\r\n  ORDER BY year DESC\r\n  LIMIT 3\r\n)\r\n\r\nSELECT\r\n  make_date(2000, split_part(m.period_value, '-', 2)::int, 1) AS time,\r\n  m.metric_value,\r\n  split_part(m.period_value, '-', 1) AS metric\r\nFROM raw.monitoring_metrics m\r\nJOIN last_3_years y\r\n  ON split_part(m.period_value, '-', 1) = y.year\r\nWHERE m.period_type = 'monthly'\r\n  AND m.metric_name = 'nb_users'\r\n  AND m.metric_value > 0\r\nORDER BY time;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Users mensuels par année",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "movie-reco-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 2,
+      "options": {
+        "barRadius": 0.2,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.3",
+      "targets": [
+        {
+          "dataset": "movie_reco",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last_3_years AS (\r\n  SELECT DISTINCT split_part(period_value, '-', 1) AS year\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly' and metric_value>0\r\n  ORDER BY year DESC\r\n  LIMIT 3\r\n),\r\nbase AS (\r\n  SELECT\r\n    to_char(to_date(period_value || '-01','YYYY-MM-DD'),'Mon') AS month,\r\n    split_part(period_value, '-', 1) AS year,\r\n    metric_value\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly'\r\n    AND metric_name = 'nb_new_users'\r\n    AND metric_value > 0\r\n)\r\nSELECT\r\n  month,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 0 LIMIT 1) THEN metric_value END) AS y0,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 1 LIMIT 1) THEN metric_value END) AS y_1,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 2 LIMIT 1) THEN metric_value END) AS y_2\r\nFROM base\r\nGROUP BY month\r\nORDER BY MIN(to_date('2000-'||month||'-01','YYYY-Mon-DD'));",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "New users mensuels par année",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "movie-reco-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "timezone": [
+          ""
+        ],
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.3.3",
+      "targets": [
+        {
+          "dataset": "movie_reco",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dfdjk9i3en4e8d"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH last_3_years AS (\r\n  SELECT DISTINCT split_part(period_value, '-', 1) AS year\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly' and metric_value>0\r\n  ORDER BY year DESC\r\n  LIMIT 3\r\n)\r\n\r\nSELECT\r\n  make_date(2000, split_part(m.period_value, '-', 2)::int, 1) AS time,\r\n  m.metric_value,\r\n  split_part(m.period_value, '-', 1) AS metric\r\nFROM raw.monitoring_metrics m\r\nJOIN last_3_years y\r\n  ON split_part(m.period_value, '-', 1) = y.year\r\nWHERE m.period_type = 'monthly'\r\n  AND m.metric_name = 'nb_movies'\r\n  AND m.metric_value > 0\r\nORDER BY time;",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "Movies mensuels par année",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "movie-reco-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "barRadius": 0.2,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        },
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "12.3.3",
+      "targets": [
+        {
+          "dataset": "movie_reco",
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH last_3_years AS (\r\n  SELECT DISTINCT split_part(period_value, '-', 1) AS year\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly' and metric_value>0\r\n  ORDER BY year DESC\r\n  LIMIT 3\r\n),\r\nbase AS (\r\n  SELECT\r\n    to_char(to_date(period_value || '-01','YYYY-MM-DD'),'Mon') AS month,\r\n    split_part(period_value, '-', 1) AS year,\r\n    metric_value\r\n  FROM raw.monitoring_metrics\r\n  WHERE period_type = 'monthly'\r\n    AND metric_name = 'nb_new_movies'\r\n    AND metric_value > 0\r\n)\r\nSELECT\r\n  month,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 0 LIMIT 1) THEN metric_value END) AS y0,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 1 LIMIT 1) THEN metric_value END) AS y_1,\r\n  MAX(CASE WHEN year = (SELECT year FROM last_3_years OFFSET 2 LIMIT 1) THEN metric_value END) AS y_2\r\nFROM base\r\nGROUP BY month\r\nORDER BY MIN(to_date('2000-'||month||'-01','YYYY-Mon-DD'));",
+          "refId": "A",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      ],
+      "title": "New movies mensuelles par année",
+      "type": "barchart"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 42,
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "KPI mensuels",
+  "uid": "adzb4d9",
+  "version": 2
+}

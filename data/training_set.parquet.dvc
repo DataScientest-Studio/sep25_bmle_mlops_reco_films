@@ -1,6 +1,0 @@
-outs:
-- md5: 79bff942617dc294b2b3b31f739b247a
-  size: 47433696
-  hash: md5
-  path: training_set.parquet
-  isexec: true
