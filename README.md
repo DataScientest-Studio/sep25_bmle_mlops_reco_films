@@ -60,8 +60,7 @@ flowchart LR
     F --> H[FastAPI Serving]
     G --> H
     H --> I[Streamlit Demo]
-
-    B --> M[Monitoring Metrics (PostgreSQL)]
+    B --> M[Monitoring Metrics PostgreSQL]
     D --> M
     M --> N[Grafana Dashboards]
 ```
@@ -154,8 +153,7 @@ docker compose up --build
 
 ---
 
-## Endpoints API principaux
-#### (Initialisation pour un suivi Prometheus)
+## Endpoints API principaux - initialisation suivi Prometheus
 
 ### Sante systeme
 
@@ -209,7 +207,7 @@ docker compose up --build
 ## Execution manuelle (hors Docker)
 
 ```bash
-# 1) Ingestion
+# 1) Ingestion + indicateurs monitoring run
 python -m src.monitoring.run_ingestion_with_monitoring
 
 # 1bis) Calcul des indicateurs de monitoring data
@@ -218,7 +216,7 @@ python -m src.monitoring.run_data_monitoring_pipeline
 # 2) Snapshot
 python src/ingestion/create_snapshot.py
 
-# 3) Training
+# 3) Training + indicateurs monitoring run
 python -m src.monitoring.run_training_with_monitoring
 
 # 4) Promotion
@@ -230,17 +228,25 @@ uvicorn main_user_api:app --host 0.0.0.0 --port 8000
 # 6) Frontend
 streamlit run src/streamlit/project_prez.py
 ```
+---
 
-### Restaurer le snapshot des métriques monitoring pour alimenter Grafana
-Evite un recalcul historique long, remplit raw.monitoring_metrics  
-Restaurer le dump :  
-    docker exec -i movie_reco_postgres \  
-    psql -U movie -d movie_reco < database/monitoring_metrics.sql  
+## Restaurer le snapshot des métriques de monitoring (Grafana)
 
-Alternative : reconstruction complète  
-Si l’on souhaite recalculer l’historique depuis les données brutes :  
-    python src/monitoring/backfill_monitoring.py  
-⚠️ Opération plus longue (gros volumes).  
+Permet d’alimenter **Grafana** sans recalcul historique long.  
+Remplit la table `raw.monitoring_metrics`.
+
+#### Option 1 — Restaurer le dump (recommandé)
+```bash
+docker exec -i movie_reco_postgres \
+psql -U movie -d movie_reco < database/monitoring_metrics.sql
+```
+
+#### Option 2 — Reconstruction complète
+Recalcule l’historique depuis les données brutes (⚠️ Opération plus longue - volumes importants) :
+```bash
+python src/monitoring/backfill_monitoring.py
+```
+
 ---
 
 ## Notes
@@ -255,7 +261,7 @@ Si l’on souhaite recalculer l’historique depuis les données brutes :
 
 ---
 
-## Equipe
+## Equipe sep25 bootcamp MLE
 
 - Pierre Barbetti
 - Raphael Da Silva
