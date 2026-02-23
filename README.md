@@ -165,7 +165,7 @@ crontab -e
 0 2 * * * /bin/bash /home/user/sep25_bmle_mlops_reco_films/daily_pipeline.sh #A remplacer par votre chemin absolu
 ````
 
-### Points d'acces
+## Points d'acces
 
 - Frontend Streamlit: `http://localhost:8501`
 - FastAPI: `http://localhost:8000`
