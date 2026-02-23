@@ -140,12 +140,12 @@ python -m src.models.promote_best_model
 
 ## Automatisation
 
-Pré-requis:
+### Pré-requis  
 * Git, DVC, Python installés.
 * Accès au dépôt Git
 * Crédential pour le DVC
 
-Configuration du dvc:  
+### Configuration du dvc  
 ````
 dvc remote modify --local origin url 'https://dagshub.com/pierreB-boop/sep25_bmle_mlops_reco_films.dvc'  
 dvc remote modify --local origin auth basic  
@@ -153,13 +153,13 @@ dvc remote modify --local origin user 'votre_username_dagshub'
 dvc remote modify --local origin password 'votre_token_dagshub'  
 ````
 
-Lancement du Pipeline complet: 
+### Lancement du Pipeline complet   
 ````
 chmod +x daily_pipeline.sh  
 bash daily_pipeline.sh
 ````
 
-Automatisation via cronjobs:
+### Automatisation via cronjobs  
 ````
 crontab -e
 0 2 * * * /bin/bash /home/user/sep25_bmle_mlops_reco_films/daily_pipeline.sh #A remplacer par votre chemin absolu
