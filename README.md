@@ -131,7 +131,14 @@ docker compose up --build
 
 <img width="834" height="454" alt="training pipeline" src="https://github.com/user-attachments/assets/566ea15c-072e-4603-b97f-172628c02087" />
 
-### Test de l'automatisation (Cron)
+### Détermination du Modèle de Prod
+
+A lancer à la racine du projet:  
+````
+python -m src.models.promote_best_model
+````
+
+## Automatisation
 
 Pré-requis:
 * Git, DVC, Python installés.
