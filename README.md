@@ -123,6 +123,40 @@ Cette strategie garde des recommandations robustes meme avec peu ou pas d'histor
 ```bash
 docker compose up --build
 ```
+### Pipeline Data (Via API)
+
+<img width="754" height="416" alt="data pipeline" src="https://github.com/user-attachments/assets/3476b9a7-dd61-4274-bf52-b251a5aefb5f" />
+
+### Pipeline Training (Via API)
+
+<img width="834" height="454" alt="training pipeline" src="https://github.com/user-attachments/assets/566ea15c-072e-4603-b97f-172628c02087" />
+
+### Test de l'automatisation (Cron)
+
+Pré-requis:
+* Git, DVC, Python installés.
+* Accès au dépôt Git
+* Crédential pour le DVC
+
+Configuration du dvc:  
+````
+dvc remote modify --local origin url 'https://dagshub.com/pierreB-boop/sep25_bmle_mlops_reco_films.dvc'  
+dvc remote modify --local origin auth basic  
+dvc remote modify --local origin user 'votre_username_dagshub'  
+dvc remote modify --local origin password 'votre_token_dagshub'  
+````
+
+Lancement du Pipeline complet: 
+````
+chmod +x daily_pipeline.sh  
+bash daily_pipeline.sh
+````
+
+Automatisation via cronjobs:
+````
+crontab -e
+0 2 * * * /bin/bash /home/user/sep25_bmle_mlops_reco_films/daily_pipeline.sh #A remplacer par votre chemin absolu
+````
 
 ### Points d'acces
 
