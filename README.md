@@ -13,7 +13,9 @@
 
 </div>
 
-> Systeme de recommandation de films industrialise MLOps : ingestion MovieLens 20M, entrainement item-based CF, tracking MLflow, versioning DVC, serving FastAPI, interface Streamlit + monitoring data, model et pipeline quotidien (observabilité ingestion des données + training)
+> Systeme de recommandation de films industrialise MLOps : 
+> ingestion MovieLens 20M, entrainement item-based CF, tracking MLflow, versioning DVC, serving FastAPI, interface Streamlit 
+> + monitoring data, model & pipeline quotidien (observabilité ingestion des données + training)
 
 ---
 
@@ -73,9 +75,9 @@ flowchart LR
 
 ## Pipelines
 
-### 1) Pipeline ingestion data + monitoring
+### 1) Pipeline ingestion data
 
-- Telechargement MovieLens (`src/monitoring/run_ingestion_with_monitoring.py`)
+- Telechargement MovieLens (`src/ingestion/ingestion_movielens.py`)
 - Initialisation DB + schema `raw` (`src/ingestion/init_db.py`)
 - Chargement SQL par chunks des CSV
 - Versioning DVC des donnees brutes (`data/raw.dvc`)
@@ -132,18 +134,57 @@ Cette strategie garde des recommandations robustes meme avec peu ou pas d'histor
 
 ### Prerequis
 
-- Docker Desktop démarré
-- WSL2 activé (Windows)
-- Git installé
-
+- Docker + Docker Compose
+- Optionnel hors Docker: Python 3.10
 
 ### Lancer la stack
 
 ```bash
 docker compose up --build
 ```
+### Pipeline Data (Via API)
 
-### Points d'acces
+<img width="754" height="416" alt="data pipeline" src="https://github.com/user-attachments/assets/3476b9a7-dd61-4274-bf52-b251a5aefb5f" />
+
+### Pipeline Training (Via API)
+
+<img width="834" height="454" alt="training pipeline" src="https://github.com/user-attachments/assets/566ea15c-072e-4603-b97f-172628c02087" />
+
+### Détermination du Modèle de Prod
+
+A lancer à la racine du projet:  
+````
+python -m src.models.promote_best_model
+````
+
+## Automatisation
+
+### Pré-requis  
+* Git, DVC, Python installés.
+* Accès au dépôt Git
+* Crédential pour le DVC
+
+### Configuration du dvc  
+````
+dvc remote modify --local origin url 'https://dagshub.com/pierreB-boop/sep25_bmle_mlops_reco_films.dvc'  
+dvc remote modify --local origin auth basic  
+dvc remote modify --local origin user 'votre_username_dagshub'  
+dvc remote modify --local origin password 'votre_token_dagshub'  
+````
+
+### Lancement du Pipeline complet avec enregistrement des indicateurs pour monitoring Grafana   
+````
+chmod +x daily_pipeline_with_monitoring.sh  
+bash daily_pipeline_with_monitoring.sh
+````
+
+### Automatisation via cronjobs  
+````
+crontab -e
+0 2 * * * /bin/bash /home/user/sep25_bmle_mlops_reco_films/daily_pipeline_with_monitoring.sh #A remplacer par votre chemin absolu
+````
+
+## Points d'acces
 
 - Frontend Streamlit: `http://localhost:8501`
 - FastAPI: `http://localhost:8000`
@@ -190,6 +231,7 @@ docker compose up --build
     |-- provisioning/
 |-- main_user_api.py
 |-- daily_pipeline.sh
+|-- daily_pipeline_with_monitoring.sh
 |-- data/
 |-- mlartifacts/
 |-- reports/figures/
@@ -207,10 +249,10 @@ docker compose up --build
 ## Execution manuelle (hors Docker)
 
 ```bash
-# 1) Ingestion + indicateurs monitoring run
+# 1) Ingestion + collecte indicateurs monitoring run
 python -m src.monitoring.run_ingestion_with_monitoring
 
-# 1bis) Calcul des indicateurs de monitoring data
+# 1bis) Collecte des indicateurs de monitoring data
 python -m src.monitoring.run_data_monitoring_pipeline 
 
 # 2) Snapshot
@@ -228,6 +270,7 @@ uvicorn main_user_api:app --host 0.0.0.0 --port 8000
 # 6) Frontend
 streamlit run src/streamlit/project_prez.py
 ```
+
 ---
 
 ## Restaurer le snapshot des métriques de monitoring (Grafana)
@@ -258,7 +301,6 @@ python src/monitoring/backfill_monitoring.py
 - `daily_pipeline_with_monitoring.sh` orchestre Git + DVC + ingestion + training + promotion + calcul des indicateurs de monitoring  
     - Temps de calcul et statuts erreur Ingestion + training  
     - Data drift + KPI métiers  
-
 ---
 
 ## Equipe sep25 bootcamp MLE
