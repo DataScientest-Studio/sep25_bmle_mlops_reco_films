@@ -138,6 +138,15 @@ A lancer à la racine du projet:
 python -m src.models.promote_best_model
 ````
 
+### Recommendation pour un user
+
+<img width="765" height="464" alt="prediction" src="https://github.com/user-attachments/assets/2b559f00-7132-4bb5-b2cf-f410070edef5" />
+
+### Top 20 par popularité Bayesienne (Cold-Start)
+
+<img width="638" height="374" alt="cold start" src="https://github.com/user-attachments/assets/5f639e0e-2db8-4943-be75-f72ddc13cd3c" />
+
+
 ## Automatisation
 
 ### Pré-requis  
