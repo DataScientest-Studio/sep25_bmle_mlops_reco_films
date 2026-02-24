@@ -137,7 +137,7 @@ def get_popular_movies(limit: int = 10):
             results.append({
                 "movie_id": mid,
                 "title": TITLE_MAP.get(mid, f"Unknown ({mid})"),
-                "stats": {"score": round(float(result["bayes_score"] or 0), 3), "mean_rating": round(float(result["mean_rating"] or 0), 2), "count": int(result["n_ratings"] or 0)}
+                "stats": {"score": round(float(row["bayes_score"] or 0), 3), "mean_rating": round(float(row["mean_rating"] or 0), 2), "count": int(row["n_ratings"] or 0)}
             })
         return results
     except Exception as e:

@@ -192,8 +192,19 @@ def train_item_based_cf(k_neighbors: int, min_ratings: int) -> None:
         nn.fit(X_iu)
 
         # 5. GENERATING NEIGHBORS
-        print("[INFO] Generating Neighbors (Vectorized)...")
-        dists, idxs = nn.kneighbors(X_iu)
+        print("[INFO] Generating Neighbors (in batches to save RAM)...")
+        batch_size = 2000
+        dists_list, idxs_list = [], []
+
+        # On boucle sur la matrice par paquets
+        for i in range(0, X_iu.shape[0], batch_size):
+            d_batch, i_batch = nn.kneighbors(X_iu[i : i + batch_size])
+            dists_list.append(d_batch)
+            idxs_list.append(i_batch)
+
+        # On rassemble les résultats à la fin
+        dists = np.vstack(dists_list)
+        idxs = np.vstack(idxs_list)
         
         # Nettoyage: On n'a plus besoin du modèle KNN ni de la grosse matrice
         del nn, X_iu
